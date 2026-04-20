@@ -1,0 +1,50 @@
+# render.yaml — Render.com deployment config
+# Deploy sebagai Background Worker (tidak sleep, gratis)
+
+services:
+  - type: worker          # Background Worker — tidak butuh HTTP, tidak sleep
+    name: ponyin-agent
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python agent.py
+    plan: free            # Free tier — 750 jam/bulan, cukup untuk 1 service
+    envVars:
+      # Isi semua ini di Render Dashboard → Environment
+      - key: TELEGRAM_API_ID
+        sync: false       # Isi manual di dashboard (sensitive)
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_PHONE
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: SIGNAL_CHANNELS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false       # Opsional
+      # Filter settings
+      - key: MIN_MC
+        value: "8000"
+      - key: MAX_MC
+        value: "800000"
+      - key: MIN_LIQ
+        value: "3000"
+      - key: MAX_TOP10
+        value: "55"
+      - key: MAX_RISK
+        value: "5.0"
+      - key: AUTO_SCAN
+        value: "true"     # Di cloud aktifkan auto scan
+      - key: SCAN_INTERVAL
+        value: "120"
+      # Trading plan
+      - key: TP1
+        value: "30"
+      - key: TP2
+        value: "50"
+      - key: SL
+        value: "20"
+      - key: PORTFOLIO_SOL
+        value: "1.0"

@@ -1,0 +1,7 @@
+# PONYIN AI AGENT v3 — Dependencies
+aiohttp>=3.9.0
+python-dotenv>=1.0.0
+telethon>=1.36.0
+
+# Opsional — hanya jika pakai AI mode (hemat credits)
+# anthropic>=0.25.0

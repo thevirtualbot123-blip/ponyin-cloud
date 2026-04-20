@@ -1,0 +1,41 @@
+2026-04-19 13:48:15,135 | INFO | Telegram bot polling started
+2026-04-19 13:48:15,312 | INFO | Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+2026-04-19 13:48:15,313 | INFO | cryptg module not installed and libssl not found, falling back to (slower) Python encryption
+2026-04-19 13:48:15,527 | INFO | Connecting to 149.154.167.51:443/TcpFull...
+2026-04-19 13:48:15,528 | INFO | Health server on port 10000
+2026-04-19 13:48:19,976 | INFO | Connection to 149.154.167.51:443/TcpFull complete!
+2026-04-19 13:48:24,462 | INFO | Phone migrated to 5
+2026-04-19 13:48:25,106 | INFO | Reconnecting to new data center 5
+2026-04-19 13:48:25,687 | INFO | Disconnecting from 149.154.167.51:443/TcpFull...
+2026-04-19 13:48:25,688 | INFO | Disconnection from 149.154.167.51:443/TcpFull complete!
+2026-04-19 13:48:25,688 | INFO | Connecting to 91.108.56.109:443/TcpFull...
+2026-04-19 13:48:27,874 | INFO | Connection to 91.108.56.109:443/TcpFull complete!
+2026-04-19 13:53:12,299 | INFO | Telegram bot polling started
+2026-04-19 13:53:12,464 | INFO | Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+2026-04-19 13:53:12,465 | INFO | cryptg module not installed and libssl not found, falling back to (slower) Python encryption
+2026-04-19 13:53:12,569 | INFO | Connecting to 91.108.56.109:443/TcpFull...
+2026-04-19 13:53:12,570 | INFO | Health server on port 10000
+2026-04-19 13:53:22,483 | ERROR | Telegram send error: 
+2026-04-19 13:53:22,579 | WARNING | Attempt 1 at connecting failed: TimeoutError: 
+2026-04-19 13:53:23,534 | ERROR | Bot polling error: Cannot connect to host api.telegram.org:443 ssl:default [getaddrinfo failed]
+2026-04-19 13:55:22,331 | INFO | Telegram bot polling started
+2026-04-19 13:55:22,498 | INFO | Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+2026-04-19 13:55:22,499 | INFO | cryptg module not installed and libssl not found, falling back to (slower) Python encryption
+2026-04-19 13:55:22,603 | INFO | Connecting to 91.108.56.109:443/TcpFull...
+2026-04-19 13:55:22,604 | INFO | Health server on port 10000
+2026-04-19 13:55:22,650 | INFO | Connection to 91.108.56.109:443/TcpFull complete!
+2026-04-20 21:45:34,624 | INFO | Telegram bot polling started
+2026-04-20 21:45:34,796 | INFO | Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+2026-04-20 21:45:34,797 | INFO | cryptg module not installed and libssl not found, falling back to (slower) Python encryption
+2026-04-20 21:45:34,908 | INFO | Menggunakan StringSession dari env var (tidak perlu OTP)
+2026-04-20 21:45:34,909 | INFO | Connecting to 91.108.56.120:443/TcpFull...
+2026-04-20 21:45:34,910 | INFO | Health server on port 10000
+2026-04-20 21:45:34,947 | INFO | Connection to 91.108.56.120:443/TcpFull complete!
+2026-04-20 21:45:35,182 | INFO | Telegram connected!
+2026-04-20 21:45:35,241 | INFO | Monitoring: https://t.me/pumpfunnevadie (Pumpfun Volume Alert 🔥🔥🔥)
+2026-04-20 21:45:35,242 | INFO | Listener aktif — 1 channels
+2026-04-20 21:45:35,783 | INFO | Bot valid: @vergoeyebot
+2026-04-20 21:45:53,201 | INFO | Bot command: /help | args: 
+2026-04-20 21:45:53,201 | INFO | Bot command: /help 
+2026-04-20 21:46:03,349 | INFO | Disconnecting from 91.108.56.120:443/TcpFull...
+2026-04-20 21:46:03,350 | INFO | Disconnection from 91.108.56.120:443/TcpFull complete!
