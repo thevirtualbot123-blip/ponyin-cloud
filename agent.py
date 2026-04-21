@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 """
-PONYIN AI AGENT v3.0 — 24/7 Cloud + Telegram Bot
-=================================================
-Deploy: Render.com Background Worker (gratis, tidak sleep)
-
-Fitur:
-- Monitor signal channel Telegram (Telethon user client)
-- Auto scan DexScreener + RugCheck
-- Filter ELPonyin + Sambelikan strategies
-- Bot Telegram: /scan /check /status /log
-- Notif otomatis ke HP kamu saat signal MASUK/WATCH
-
-Setup .env:
-  TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_PHONE → Telethon
-  TELEGRAM_BOT_TOKEN → @BotFather
-  TELEGRAM_CHAT_ID   → ID kamu (@userinfobot)
-  SIGNAL_CHANNELS    → channel yang dimonitor
+PONYIN AI AGENT v3.1 — FIXED
+==============================
+Fix:
+  - sizing_note error → filter_engine selalu set field ini
+  - Auto scan TIDAK jalan kecuali diberi command atau ada signal dari channel
+  - Deduplication: token yang sama tidak diproses ulang dalam 30 menit
+  - Bot notif hanya kirim MASUK/WATCH (bukan SKIP)
+  - Tidak ada loop yang trigger scan sendiri
 """
 
 import asyncio, sys, os, json, logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     from dotenv import load_dotenv
@@ -48,14 +40,15 @@ from telegram_listener import TelegramListener
 from telegram_bot import TelegramBot, format_status, format_log
 from display import Display
 
+
 def banner():
     print(f"""
 {C}{B}
 ╔══════════════════════════════════════════════════════════════════╗
-║       PONYIN AI AGENT v3.0 — 24/7 Cloud + Telegram Bot          ║
-║  Signal Channel → Filter → Bot Notif → Kamu Eksekusi Manual     ║
+║       PONYIN AI AGENT v3.1 — Signal Only + Telegram Bot         ║
+║  Channel Signal / Manual Command → Filter → Notif ke HP         ║
 ╚══════════════════════════════════════════════════════════════════╝{R}
-{D}Filter: ELPonyin + Sambelikan (Cluster, Dev Farm, Smart Money, Timing){R}
+{D}Filter: ELPonyin + Sambelikan | SIGNAL ONLY — eksekusi manual{R}
 """)
 
 
@@ -67,122 +60,137 @@ class PonyinAgent:
         self.filter   = FilterEngine(self.cfg)
         self.decision = DecisionEngine(self.cfg)
         self.display  = Display()
-
-        # Telegram Bot (notif ke kamu)
-        self.bot = TelegramBot(
+        self.bot      = TelegramBot(
             token=self.cfg.BOT_TOKEN,
             chat_id=self.cfg.BOT_CHAT_ID,
             on_command=self._handle_bot_command,
         )
-
-        # Telegram Listener (baca channel signal)
         self.tg_listener = TelegramListener(self.cfg, self._on_signal)
 
-        self._processed: set = set()
-        self._queue: asyncio.Queue = asyncio.Queue()
+        # Deduplication: {mint: datetime_terakhir_diproses}
+        self._processed: dict = {}
+        self._DEDUP_MINUTES   = 30  # token sama tidak diproses ulang dalam 30 menit
+
+        self._queue = asyncio.Queue()
         self._stats = {"total": 0, "masuk": 0, "watch": 0, "skip": 0}
 
-    # ── Signal masuk ke queue ─────────────────────────────
+    def _is_duplicate(self, mint: str) -> bool:
+        """Cek apakah token sudah diproses dalam DEDUP_MINUTES terakhir."""
+        if mint not in self._processed:
+            return False
+        last = self._processed[mint]
+        age  = (datetime.now() - last).total_seconds() / 60
+        return age < self._DEDUP_MINUTES
+
+    def _mark_processed(self, mint: str):
+        self._processed[mint] = datetime.now()
+
+    # ── Signal callback dari Telegram listener ────────────
     async def _on_signal(self, source: str, mint: str, raw_text: str):
-        if mint in self._processed:
+        """Hanya dipanggil saat ada pesan baru di channel signal."""
+        if self._is_duplicate(mint):
+            log.debug(f"Dedup skip: {mint[:12]} (baru diproses)")
             return
-        self._processed.add(mint)
+        self._mark_processed(mint)
         await self._queue.put({
             "source": source, "mint": mint,
-            "raw": raw_text, "ts": datetime.now().isoformat()
+            "raw": raw_text, "ts": datetime.now().isoformat(),
+            "manual": False,
         })
 
     # ── Process satu signal ───────────────────────────────
-    async def process_signal(self, sig: dict, manual: bool = False):
+    async def process_signal(self, sig: dict):
         mint   = sig["mint"]
         source = sig.get("source", "MANUAL")
         raw    = sig.get("raw", "")
+        manual = sig.get("manual", False)
 
-        # Terminal output
         print(f"\n{C}{'─'*60}{R}")
-        src_label = f"{Y}[MANUAL]{R}" if manual else f"{C}[{source[:20]}]{R}"
+        src_label = f"{Y}[MANUAL]{R}" if manual else f"{C}[{source[:25]}]{R}"
         print(f"{src_label} {D}{datetime.now().strftime('%H:%M:%S')}{R}")
         if raw and not manual:
-            print(f"{D}{raw[:80]}...{R}" if len(raw)>80 else f"{D}{raw}{R}")
-        print(f"{D}Fetching: {mint[:20]}...{R}")
+            preview = raw[:80] + "..." if len(raw) > 80 else raw
+            print(f"{D}{preview}{R}")
+        print(f"{D}Fetching: {mint[:24]}...{R}")
 
         async with self.fetcher.session() as session:
             token = await self.fetcher.fetch_token(session, mint)
             if not token:
-                msg = f"❌ Token tidak ditemukan: <code>{mint}</code>"
-                print(f"{RD}Token tidak ditemukan{R}")
+                msg = f"❌ Token tidak ditemukan:\n<code>{mint}</code>"
+                print(f"{RD}Token tidak ditemukan.{R}")
                 if manual:
                     await self.bot.send(msg)
                 return
 
+            # Filter + decision
             token    = self.filter.run(token)
             decision = await self.decision.decide(token, source, raw)
 
-            # Terminal display
+            # Display terminal
             self.display.print_signal(token, decision, source)
 
-            # Update stats
+            # Stats
             self._stats["total"] += 1
             v = token.verdict
             if "MASUK" in v:   self._stats["masuk"] += 1
             elif "WATCH" in v: self._stats["watch"] += 1
             else:               self._stats["skip"]  += 1
 
-            # Log
+            # Log ke file
             self._log_signal(token, decision, source)
 
-            # Kirim ke Bot Telegram
-            # Kirim notif untuk MASUK, WATCH, dan manual check apapun
-            should_notify = (
-                manual or
-                "MASUK" in token.verdict or
-                "WATCH" in token.verdict
-            )
+            # Kirim ke bot Telegram:
+            # - Manual check: selalu kirim (apapun hasilnya)
+            # - Auto/signal channel: HANYA kirim kalau MASUK atau WATCH
+            should_notify = manual or ("MASUK" in v) or ("WATCH" in v)
 
             if should_notify and self.cfg.BOT_TOKEN:
-                token_dict = token.to_dict()
-                token_dict.update({
-                    "price":        token.price,
-                    "plan":         token.plan,
-                    "sizing_note":  token.sizing_note,
-                    "source":       source,
-                    "dex":          token.dex,
-                    "age_hours":    token.age_hours,
-                    "mint_auth":    token.mint_auth,
-                    "wash_trading": token.wash_trading_flag,
-                    "chg1h":        token.chg1h,
-                    "chg24h":       token.chg24h,
-                    "buys1h":       token.buys1h,
-                    "sells1h":      token.sells1h,
-                    "lp_burn":      token.lp_burn,
-                    "has_twitter":  token.has_twitter,
-                    "has_telegram": token.has_telegram,
-                })
-                dec_dict = {
+                token_dict = {**token.to_dict()}
+                dec_dict   = {
                     "action":     decision.action,
                     "conviction": decision.conviction,
                     "reason":     decision.reason,
                 }
                 await self.bot.send_signal(token_dict, dec_dict)
 
-    # ── Handle command dari Bot Telegram ─────────────────
+    # ── Consumer loop ─────────────────────────────────────
+    async def signal_consumer(self):
+        """Proses queue signal satu per satu, tidak spam."""
+        while True:
+            sig = await self._queue.get()
+            try:
+                await self.process_signal(sig)
+            except Exception as e:
+                log.error(f"Error process signal: {e}", exc_info=True)
+                if self.cfg.BOT_TOKEN and sig.get("manual"):
+                    await self.bot.send(f"⚠️ Error: {str(e)[:120]}")
+            finally:
+                self._queue.task_done()
+            await asyncio.sleep(1.5)  # jeda antar pemrosesan
+
+    # ── TIDAK ADA auto scan loop! ─────────────────────────
+    # Scan hanya terjadi jika:
+    # 1. Ada pesan di channel signal (via TelegramListener)
+    # 2. User kirim /scan atau /check ke bot
+    # Ini mencegah spam notif setiap menit
+
+    # ── Handle command dari bot ───────────────────────────
     async def _handle_bot_command(self, command: str, args: str):
-        """Proses command dari Telegram bot"""
-        log.info(f"Bot command: {command} {args[:30]}")
+        log.info(f"Bot cmd: {command} args={args[:30]}")
 
         if command in ("/start", "/help"):
             await self.bot.send(
-                "🤖 <b>PONYIN AI AGENT v3.0</b>\n\n"
+                "🤖 <b>PONYIN AI AGENT v3.1</b>\n\n"
                 "<b>Commands:</b>\n"
                 "/scan — scan token baru sekali\n"
-                "/check &lt;CA&gt; — check satu token\n"
-                "/status — statistik signal hari ini\n"
-                "/log — 10 signal terakhir\n\n"
-                "<b>Atau:</b>\n"
-                "Kirim CA address langsung (32+ karakter)\n\n"
-                "<i>Filter: ELPonyin + Sambelikan\n"
-                "Strategi: Cluster, Dev Farm, Smart Money,\n"
-                "Timing Score, Position Sizing</i>"
+                "/check &lt;CA&gt; — analisis satu token\n"
+                "/status — statistik hari ini\n"
+                "/log — 10 signal terakhir\n"
+                "/help — perintah ini\n\n"
+                "Atau <b>paste CA (32+ karakter)</b> langsung\n\n"
+                "<i>Bot hanya kirim notif MASUK/WATCH.\n"
+                "SKIP tidak dikirim agar tidak spam.\n"
+                "Eksekusi tetap manual kamu.</i>"
             )
 
         elif command == "/status":
@@ -193,26 +201,27 @@ class PonyinAgent:
             await self.bot.send(format_log(records))
 
         elif command == "/scan":
-            await self.bot.send("🔍 Scanning token baru...")
+            await self.bot.send("🔍 <b>Scanning token baru sekali...</b>")
             try:
                 async with self.fetcher.session() as session:
                     mints = await self.fetcher.get_new_token_mints(session)
-                    new   = [m for m in mints if m not in self._processed]
+                    new   = [m for m in mints if not self._is_duplicate(m)]
                     if not new:
-                        await self.bot.send("Tidak ada token baru ditemukan.")
+                        await self.bot.send("✅ Tidak ada token baru saat ini.")
                         return
-                    await self.bot.send(f"📡 {len(new)} kandidat baru — menganalisis...")
-                    count = 0
-                    for mint in new[:10]:
-                        await self._queue.put({
-                            "source": "MANUAL_SCAN", "mint": mint,
-                            "raw": "", "ts": datetime.now().isoformat()
-                        })
-                        count += 1
                     await self.bot.send(
-                        f"✅ {count} token masuk queue untuk dianalisis.\n"
-                        f"Hasil akan dikirim otomatis."
+                        f"📡 {len(new)} kandidat ditemukan.\n"
+                        f"Hanya MASUK/WATCH yang dikirim."
                     )
+                    for mint in new[:15]:
+                        self._mark_processed(mint)
+                        await self._queue.put({
+                            "source": "CMD_SCAN",
+                            "mint": mint,
+                            "raw": "",
+                            "ts": datetime.now().isoformat(),
+                            "manual": False,
+                        })
             except Exception as e:
                 await self.bot.send(f"❌ Error scan: {str(e)[:100]}")
 
@@ -220,131 +229,100 @@ class PonyinAgent:
             mint = args.strip()
             if len(mint) < 32:
                 await self.bot.send(
-                    "⚠️ Format salah.\n"
-                    "Gunakan: /check &lt;CA address&gt;\n"
-                    "Atau kirim CA langsung (32+ karakter)"
+                    "⚠️ Format: /check &lt;CA address&gt;\n"
+                    "Atau paste CA langsung (32+ karakter)"
                 )
                 return
-            await self.bot.send(f"🔍 Menganalisis: <code>{mint}</code>")
-            if mint in self._processed:
-                self._processed.discard(mint)  # Force recheck
+            await self.bot.send(f"🔍 Menganalisis...\n<code>{mint}</code>")
+            # Force recheck (hapus dari dedup)
+            self._processed.pop(mint, None)
             await self._queue.put({
-                "source": "BOT_MANUAL", "mint": mint,
-                "raw": "Manual check via bot", "ts": datetime.now().isoformat()
+                "source": "BOT_CHECK",
+                "mint": mint,
+                "raw": "Manual check",
+                "ts": datetime.now().isoformat(),
+                "manual": True,  # selalu kirim hasilnya
             })
 
         else:
-            # Mungkin CA address langsung
-            if len(command.replace("/","")) >= 32:
-                mint = command.replace("/","")
+            # Mungkin langsung CA
+            ca = command.lstrip("/").strip()
+            if len(ca) >= 32 and " " not in ca:
+                await self.bot.send(f"🔍 Menganalisis...\n<code>{ca}</code>")
+                self._processed.pop(ca, None)
                 await self._queue.put({
-                    "source": "BOT_MANUAL", "mint": mint,
-                    "raw": "Direct CA", "ts": datetime.now().isoformat()
+                    "source": "BOT_DIRECT",
+                    "mint": ca,
+                    "raw": "Direct CA",
+                    "ts": datetime.now().isoformat(),
+                    "manual": True,
                 })
             else:
-                await self.bot.send(f"❓ Command tidak dikenal: {command}")
+                await self.bot.send(f"❓ Command tidak dikenal: {command}\nKetik /help")
 
-    # ── Consumer loop ─────────────────────────────────────
-    async def signal_consumer(self):
-        while True:
-            sig = await self._queue.get()
-            try:
-                manual = sig.get("source", "") in ("MANUAL", "BOT_MANUAL", "MANUAL_SCAN")
-                await self.process_signal(sig, manual=manual)
-            except Exception as e:
-                log.error(f"Error processing {sig.get('mint','?')}: {e}")
-                if self.cfg.BOT_TOKEN:
-                    await self.bot.send(f"⚠️ Error: {str(e)[:100]}")
-            finally:
-                self._queue.task_done()
-            await asyncio.sleep(1.5)
-
-    # ── Auto scan loop ─────────────────────────────────────
-    async def scan_loop(self):
-        if not self.cfg.AUTO_SCAN_ENABLED:
-            while True:
-                await asyncio.sleep(3600)
-            return
-        await asyncio.sleep(20)  # warmup
-        log.info(f"Auto scan aktif — interval {self.cfg.SCAN_INTERVAL}s")
-        while True:
-            try:
-                async with self.fetcher.session() as session:
-                    mints = await self.fetcher.get_new_token_mints(session)
-                    new   = [m for m in mints if m not in self._processed]
-                    if new:
-                        print(f"{D}[SCAN] {len(new)} kandidat baru{R}")
-                        for mint in new[:10]:
-                            await self._queue.put({
-                                "source": "AUTO_SCAN", "mint": mint,
-                                "raw": "", "ts": datetime.now().isoformat()
-                            })
-            except Exception as e:
-                log.error(f"Scan error: {e}")
-            await asyncio.sleep(self.cfg.SCAN_INTERVAL)
-
-    # ── Health check HTTP server (untuk Render) ───────────
+    # ── Health server (untuk Railway/Render) ──────────────
     async def health_server(self):
-        """
-        Simple HTTP server untuk Render health check.
-        Render Web Service butuh HTTP response.
-        Untuk Background Worker tidak perlu, tapi tidak ada salahnya.
-        """
-        port = int(os.getenv("PORT", "10000"))
+        port = int(os.getenv("PORT", "8080"))
         try:
             from aiohttp import web
             app = web.Application()
-            app.router.add_get("/", lambda r: web.Response(text="PONYIN AGENT OK"))
+            app.router.add_get("/", lambda r: web.Response(text="PONYIN OK"))
             app.router.add_get("/health", lambda r: web.Response(
                 text=json.dumps({
-                    "status":    "ok",
-                    "signals":   self._stats["total"],
+                    "status": "ok",
+                    "signals": self._stats["total"],
                     "processed": len(self._processed),
-                    "ts":        datetime.now().isoformat()
                 }),
                 content_type="application/json"
             ))
             runner = web.AppRunner(app)
             await runner.setup()
-            site = web.TCPSite(runner, "0.0.0.0", port)
-            await site.start()
-            log.info(f"Health server on port {port}")
+            await web.TCPSite(runner, "0.0.0.0", port).start()
+            log.info(f"Health server: port {port}")
         except Exception as e:
             log.warning(f"Health server skip: {e}")
 
-    # ── Status periodic ────────────────────────────────────
-    async def status_loop(self):
+    # ── Hourly summary (opsional, tidak spam) ─────────────
+    async def hourly_summary(self):
+        """Kirim summary ke bot setiap 1 jam — hanya jika ada signal."""
         while True:
-            await asyncio.sleep(3600)  # setiap 1 jam
-            total = self._stats["total"]
-            if total > 0:
-                msg = format_status(self._stats, len(self._processed))
-                await self.bot.send(f"⏰ <b>Update 1 Jam</b>\n\n{msg}")
+            await asyncio.sleep(3600)
+            if self._stats["total"] > 0:
+                await self.bot.send(
+                    f"⏰ <b>Update 1 Jam</b>\n\n"
+                    + format_status(self._stats, len(self._processed))
+                )
 
-    # ── Log helpers ────────────────────────────────────────
+    # ── Log helpers ───────────────────────────────────────
     def _log_signal(self, token, decision, source):
         rec = {
             "ts": datetime.now().isoformat(),
             "source": source,
-            "mint": token.mint, "name": token.name, "symbol": token.symbol,
-            "verdict": token.verdict, "flags": token.flags,
-            "mc": token.mc, "liq": token.liq, "vol1h": token.vol1h,
+            "mint": token.mint,
+            "name": token.name,
+            "symbol": token.symbol,
+            "verdict": token.verdict,
+            "flags": token.flags,
+            "mc": token.mc,
+            "liq": token.liq,
+            "vol1h": token.vol1h,
             "price": token.price,
-            "top10_pct": token.top10_pct, "risk_norm": token.risk_norm,
+            "top10_pct": token.top10_pct,
+            "risk_norm": token.risk_norm,
             "lp_burn": token.lp_burn,
-            "position_type":   getattr(token, "position_type",   "?"),
-            "wash_trading":    getattr(token, "wash_trading_flag", False),
-            "cluster_risk":    getattr(token, "cluster_risk",     "?"),
-            "dev_farm_risk":   getattr(token, "dev_farm_risk",    "?"),
-            "smart_money":     getattr(token, "smart_money_present", False),
-            "timing_score":    getattr(token, "timing_score",     0),
-            "holder_health":   getattr(token, "holder_health",    0),
-            "bounce_potential":getattr(token, "bounce_potential", False),
+            "position_type": token.position_type,
+            "wash_trading": token.wash_trading_flag,
+            "cluster_risk": token.cluster_risk,
+            "dev_farm_risk": token.dev_farm_risk,
+            "smart_money": token.smart_money_present,
+            "timing_score": token.timing_score,
+            "holder_health": token.holder_health,
+            "bounce_potential": token.bounce_potential,
+            "sizing_note": token.sizing_note,
             "plan": token.plan,
-            "sizing_note": getattr(token, "sizing_note", ""),
-            "decision": decision.action, "conviction": decision.conviction,
+            "decision": decision.action,
+            "conviction": decision.conviction,
             "reason": decision.reason,
-            "dex_link": f"https://dexscreener.com/solana/{token.mint}",
         }
         with open("agent_signals.json", "a", encoding="utf-8") as f:
             f.write(json.dumps(rec) + "\n")
@@ -357,17 +335,16 @@ class PonyinAgent:
         except Exception:
             return []
 
-    # ── Terminal input (jika dijalankan lokal) ─────────────
+    # ── Terminal input (lokal saja) ───────────────────────
     async def input_loop(self):
-        """Input loop untuk penggunaan lokal (tidak aktif di Render)"""
-        is_render = os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID")
-        if is_render:
-            # Di Render tidak ada stdin interaktif
+        is_cloud = bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")
+                        or os.getenv("RAILWAY_SERVICE_ID"))
+        if is_cloud:
             while True:
                 await asyncio.sleep(3600)
             return
 
-        print(f"\n{G}Ketik CA untuk manual check, 'scan', 'status', atau 'quit'{R}")
+        print(f"\n{G}Ketik CA, 'scan', 'status', 'log', atau 'quit'{R}")
         loop = asyncio.get_event_loop()
         while True:
             try:
@@ -376,73 +353,72 @@ class PonyinAgent:
                 )
             except (EOFError, KeyboardInterrupt):
                 break
+
             if not raw: continue
             cmd = raw.lower()
-            if cmd in ("quit","q"):
+
+            if cmd in ("quit", "q"):
+                print(f"{Y}Agent dihentikan.{R}")
                 sys.exit(0)
             elif cmd == "scan":
                 await self._handle_bot_command("/scan", "")
             elif cmd == "status":
                 print(format_status(self._stats, len(self._processed)))
             elif cmd == "log":
-                recs = self._load_log(10)
-                for r in recs:
-                    v  = r.get("verdict","?")
-                    sym= r.get("symbol","?")
-                    mc = r.get("mc",0)
-                    ts = r.get("ts","")[:16]
-                    print(f"  {sym:<10} ${mc:>8,.0f} {v[:6]} {ts}")
-            elif len(raw) >= 32:
+                for r in self._load_log(10):
+                    v = r.get("verdict","?")
+                    vc = G if "MASUK" in v else (Y if "WATCH" in v else D)
+                    print(f"  {vc}{r.get('symbol','?'):<10}{R} "
+                          f"${r.get('mc',0):>8,.0f} {v[:6]} "
+                          f"{r.get('ts','')[:16]}")
+            elif len(raw) >= 32 and " " not in raw:
                 await self._handle_bot_command("/check", raw)
             else:
-                print(f"{Y}Tidak dikenal. Ketik CA/scan/status/quit{R}")
+                print(f"{Y}Tidak dikenal. Ketik CA/scan/status/log/quit{R}")
 
-    # ── Main run ───────────────────────────────────────────
+    # ── Main run ──────────────────────────────────────────
     async def run(self):
         banner()
 
-        is_render = bool(os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"))
-        print(f"{G}PONYIN AGENT v3.0 starting...{R}")
-        print(f"  Mode       : {'☁ Render Cloud' if is_render else '💻 Local'}")
-        print(f"  Auto scan  : {'ON ('+str(self.cfg.SCAN_INTERVAL)+'s)' if self.cfg.AUTO_SCAN_ENABLED else 'OFF'}")
+        is_cloud = bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT"))
+        print(f"{G}PONYIN AGENT v3.1 starting...{R}")
+        print(f"  Mode       : {'☁ Cloud' if is_cloud else '💻 Local'}")
         print(f"  Bot token  : {'✓ Set' if self.cfg.BOT_TOKEN else '✗ Tidak ada'}")
         print(f"  Signal ch  : {', '.join(self.cfg.SIGNAL_CHANNELS) or 'none'}")
         print(f"  AI         : {'ON' if self.cfg.AI_ENABLED else 'OFF (rule-based)'}")
+        print(f"  Auto scan  : OFF (hanya jalan via /scan command atau channel signal)")
         print()
 
         tasks = [
             asyncio.create_task(self.signal_consumer(), name="consumer"),
-            asyncio.create_task(self.scan_loop(),       name="scanner"),
-            asyncio.create_task(self.status_loop(),     name="status_loop"),
             asyncio.create_task(self.health_server(),   name="health"),
+            asyncio.create_task(self.hourly_summary(),  name="hourly"),
             asyncio.create_task(self.input_loop(),      name="input"),
         ]
 
-        # Bot Telegram (notif ke kamu)
         if self.cfg.BOT_TOKEN:
             tasks.append(asyncio.create_task(self.bot.run(), name="tg_bot"))
             print(f"{G}✅ Telegram Bot aktif{R}")
         else:
-            print(f"{Y}⚠  BOT_TOKEN tidak ada — notif bot disabled{R}")
-            print(f"   Set TELEGRAM_BOT_TOKEN dan TELEGRAM_CHAT_ID di .env")
+            print(f"{Y}⚠  BOT_TOKEN tidak ada{R}")
 
-        # Telethon listener (baca channel signal)
         if self.cfg.TG_API_ID and self.cfg.TG_API_HASH:
-            tasks.append(asyncio.create_task(self.tg_listener.run(), name="tg_listener"))
-            print(f"{G}✅ Telegram channel listener aktif{R}")
+            tasks.append(asyncio.create_task(
+                self.tg_listener.run(), name="tg_listener"
+            ))
+            print(f"{G}✅ Channel listener aktif{R}")
         else:
-            print(f"{Y}⚠  TG credentials tidak ada — channel listener disabled{R}")
+            print(f"{Y}⚠  TG credentials tidak ada — channel listener off{R}")
 
-        print(f"\n{G}{B}🚀 AGENT AKTIF 24/7{R}\n")
+        print(f"\n{G}{B}🚀 AGENT AKTIF{R}\n")
 
         try:
             await asyncio.gather(*tasks)
         except SystemExit:
             pass
         except Exception as e:
-            log.error(f"Fatal: {e}")
-            if self.cfg.BOT_TOKEN:
-                await self.bot.send(f"🚨 Agent error: {str(e)[:100]}\nRestarting...")
+            log.error(f"Fatal: {e}", exc_info=True)
+            await self.bot.send(f"🚨 Agent crash: {str(e)[:100]}")
             raise
 
 

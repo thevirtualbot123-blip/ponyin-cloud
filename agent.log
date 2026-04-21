@@ -39,3 +39,22 @@
 2026-04-20 21:45:53,201 | INFO | Bot command: /help 
 2026-04-20 21:46:03,349 | INFO | Disconnecting from 91.108.56.120:443/TcpFull...
 2026-04-20 21:46:03,350 | INFO | Disconnection from 91.108.56.120:443/TcpFull complete!
+2026-04-20 22:43:18,841 | INFO | Telegram bot polling started
+2026-04-20 22:43:19,037 | INFO | Failed to load SSL library: <class 'OSError'> (no library called "ssl" found)
+2026-04-20 22:43:19,038 | INFO | cryptg module not installed and libssl not found, falling back to (slower) Python encryption
+2026-04-20 22:43:19,198 | INFO | Menggunakan StringSession dari env var (tidak perlu OTP)
+2026-04-20 22:43:19,198 | INFO | Connecting to 91.108.56.120:443/TcpFull...
+2026-04-20 22:43:19,199 | INFO | Health server on port 10000
+2026-04-20 22:43:19,231 | INFO | Connection to 91.108.56.120:443/TcpFull complete!
+2026-04-20 22:43:19,838 | INFO | Bot valid: @vergoeyebot
+2026-04-20 22:43:32,425 | INFO | Bot command: /scan 
+2026-04-20 22:43:37,092 | ERROR | Error processing Ee2u1vzHcvscBPxDRrTtJ7ZQsRGMqZXYaxQqxrtPpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:41,284 | ERROR | Error processing 2xm52wHrx46fKxi8Xso6tAezzddDUJBzFb5swHdnpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:44,267 | ERROR | Error processing 6igN8SFy32TGyjfaNnaQEu4Mss6Fsb7ufy4MiEypump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:47,315 | ERROR | Error processing WPk8Qf8jeb6UU4mFwpXQ1GZxKc5fEJuHkQqvbfdpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:52,434 | ERROR | Error processing 2Yg3zPgM3bznRUv1DNGZrK5wCrMrg51xTMak4uhFbQFg: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:56,227 | ERROR | Error processing H7ETD67xPws33iKr3DZWsy1ZYKPgqLkzQB5n7daxpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:43:59,326 | ERROR | Error processing BG2WGdqiNaAijvURTiioE11qQMZA6GVZsZiXHQ4Jpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:44:03,179 | ERROR | Error processing GnJNzEbWD588zgDGgGnVM8PgM68BWrtfR8bqqCGtpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:44:06,160 | ERROR | Error processing 8VvMTxCFFcCXycSRQMpkaZ5p28s7hzCgBbBH6GQFpump: 'Token' object has no attribute 'sizing_note'
+2026-04-20 22:44:10,541 | ERROR | Error processing 8YCvkCMDBSkQv9nBZCHV4TGGc9WPoUzXUPXQCuSTpump: 'Token' object has no attribute 'sizing_note'
