@@ -140,11 +140,13 @@ class PonyinAgent:
             self._log_signal(token, decision, source)
 
             # Kirim ke bot Telegram:
-            # - Manual check: selalu kirim (apapun hasilnya)
-            # - Auto/signal channel: HANYA kirim kalau MASUK atau WATCH
-            should_notify = manual or ("MASUK" in v) or ("WATCH" in v)
+            # - Manual check: selalu kirim detail lengkap
+            # - Channel signal MASUK/WATCH: kirim detail lengkap
+            # - Channel signal SKIP: kirim notif SINGKAT saja (1 baris)
+            #   agar user bisa lihat dan putuskan sendiri
+            from_channel = source.startswith("TG:")
 
-            if should_notify and self.cfg.BOT_TOKEN:
+            if (manual or "MASUK" in v or "WATCH" in v) and self.cfg.BOT_TOKEN:
                 token_dict = {**token.to_dict()}
                 dec_dict   = {
                     "action":     decision.action,
@@ -152,6 +154,25 @@ class PonyinAgent:
                     "reason":     decision.reason,
                 }
                 await self.bot.send_signal(token_dict, dec_dict)
+
+            elif "SKIP" in v and from_channel and self.cfg.BOT_TOKEN:
+                # SKIP dari channel signal: kirim ringkasan singkat
+                # Agar user bisa cross-check sendiri
+                top_flag = next(
+                    (d.step for d in token.filter_details if d.passed is False),
+                    "multiple flags"
+                )
+                skip_msg = (
+                    f"⏭ <b>SKIP</b> — {token.name} (${token.symbol}) "
+                    f"[{token.position_type}]
+"
+                    f"MC: ${token.mc:,.0f} | Flags: {token.flags} "
+                    f"| Top flag: {top_flag}
+"
+                    f"<a href='https://dexscreener.com/solana/{token.mint}'>DEX</a> | "
+                    f"<a href='https://rugcheck.xyz/tokens/{token.mint}'>RugCheck</a>"
+                )
+                await self.bot.send(skip_msg)
 
     # ── Consumer loop ─────────────────────────────────────
     async def signal_consumer(self):
