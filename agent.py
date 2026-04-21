@@ -164,11 +164,9 @@ class PonyinAgent:
                 )
                 skip_msg = (
                     f"⏭ <b>SKIP</b> — {token.name} (${token.symbol}) "
-                    f"[{token.position_type}]
-"
+                    f"[{token.position_type}]"
                     f"MC: ${token.mc:,.0f} | Flags: {token.flags} "
-                    f"| Top flag: {top_flag}
-"
+                    f"| Top flag: {top_flag}"
                     f"<a href='https://dexscreener.com/solana/{token.mint}'>DEX</a> | "
                     f"<a href='https://rugcheck.xyz/tokens/{token.mint}'>RugCheck</a>"
                 )
