@@ -1,26 +1,14 @@
 """
-filter_engine.py — PONYIN AI AGENT v4.1
+filter_engine.py — PONYIN AI AGENT v4.2
 =========================================
-Kalibrasi dari backtest nyata:
+Fix dari screenshot nyata:
 
-Pelajaran:
-  $earthcoin: Liq $0 = masih bonding curve (pump.fun), bukan dead
-              → jangan skip hanya karena Liq $0
-  $MWGA:      MC $125K, Total Fees 1.68 SOL ($240) → fee/MC ratio 0.19%
-              Normal token seharusnya 3-15% fees dari MC
-              Ini rug indicator kuat!
-  $TOFU:      MC $116K, Total Fees 2.05 SOL → sama, rug
-  $earthcoin: 6 sniper buy 21.1% → tapi akhirnya terbang ke $329K
-              Sniper tidak selalu berarti rug — perlu lihat konteks
-  $SIF:       Dev: ✅ (sold) di channel = positif
-              Bot harus menangkap pesan ini (bukan skip karena "sold")
-
-Filter baru v4.1:
-  1. Bonding curve token (Liq $0): info saja, bukan skip
-  2. Fee/MC ratio check: fees rendah vs MC = rug red flag
-  3. Sniper: hitung % sniper tapi tidak langsung flag kecuali > 15%
-  4. Cluster scoring lebih presisi
-  5. Wash trading threshold lebih ketat (hanya extreme case)
+1. float division by zero → safe_div() di semua tempat
+2. holder_count_rc = 20 false positive → RugCheck perlu waktu index holders
+   Solusi: jangan gunakan holder_count untuk fee health jika token < 2h
+3. Kalibrasi ulang fee health: hanya berlaku untuk token mature (>2h)
+4. Bonding curve: Liq $0 + Vol $0 → token mati atau belum aktif, bukan skip
+5. Semua variable di-init dengan benar untuk mencegah NameError
 """
 
 import re
@@ -28,6 +16,17 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 from config import AgentConfig
+
+
+# ── Safe division ─────────────────────────────────────────────
+def safe_div(a: float, b: float, default: float = 0.0) -> float:
+    """Division yang tidak crash jika b = 0"""
+    try:
+        if b == 0 or b is None:
+            return default
+        return a / b
+    except Exception:
+        return default
 
 
 @dataclass
@@ -75,7 +74,7 @@ class Token:
     dev_farm_reason: str = ""
     smart_money_present: bool = False
     smart_money_pct: float = 0.0
-    timing_score: int = 0
+    timing_score: int = 50
     timing_reason: str = ""
     bounce_potential: bool = False
     bounce_reason: str = ""
@@ -83,8 +82,8 @@ class Token:
     holder_health: int = 50
     momentum_score: int = 50
     position_type: str = "LOWCAP"
-    is_bonding_curve: bool = False   # NEW: token masih di pump.fun
-    fee_health: str = "UNKNOWN"      # NEW: LOW/MEDIUM/HIGH/DANGER
+    is_bonding_curve: bool = False
+    fee_health: str = "HEALTHY"
     fee_health_reason: str = ""
     flags: int = 0
     verdict: str = "PENDING"
@@ -95,11 +94,11 @@ class Token:
     @property
     def buy_sell_ratio(self) -> float:
         total = self.buys1h + self.sells1h
-        return self.buys1h / total if total > 0 else 0.5
+        return safe_div(self.buys1h, total, 0.5)
 
     @property
     def liq_mc_ratio(self) -> float:
-        return self.liq / self.mc if self.mc > 0 else 0.0
+        return safe_div(self.liq, self.mc, 0.0)
 
     def to_dict(self) -> dict:
         return {
@@ -117,14 +116,14 @@ class Token:
             "wash_trading_flag": self.wash_trading_flag,
             "wash_trading_reason": self.wash_trading_reason,
             "cluster_risk": self.cluster_risk,
-            "cluster_score": self.cluster_score,       # FIX: selalu ada
+            "cluster_score": self.cluster_score,
             "dev_farm_risk": self.dev_farm_risk,
             "smart_money_present": self.smart_money_present,
             "smart_money_pct": self.smart_money_pct,
             "timing_score": self.timing_score,
             "timing_reason": self.timing_reason,
             "holder_health": self.holder_health,
-            "momentum_score": self.momentum_score,     # FIX: selalu ada
+            "momentum_score": self.momentum_score,
             "holder_count_rc": self.holder_count_rc,
             "bounce_potential": self.bounce_potential,
             "liq_trap_risk": self.liq_trap_risk,
@@ -170,6 +169,15 @@ class FilterEngine:
             t = self._holder_health(t)
             t = self._apply_filters(t)
             t = self._build_plan(t)
+        except ZeroDivisionError as e:
+            import logging
+            logging.getLogger("PONYIN.Filter").error(
+                f"Division by zero in filter {t.mint[:12]}: {e}", exc_info=True
+            )
+            # Lanjutkan dengan data yang ada, jangan crash
+            t.verdict     = "ERROR"
+            t.flags       = 99
+            t.sizing_note = "Data error — cek manual"
         except Exception as e:
             import logging
             logging.getLogger("PONYIN.Filter").error(
@@ -177,45 +185,36 @@ class FilterEngine:
             )
             t.verdict     = "ERROR"
             t.flags       = 99
-            t.sizing_note = "Error saat filter"
-            # Pastikan semua field ada
-            if t.cluster_score == 0: t.cluster_score = 50
-            if t.momentum_score == 0: t.momentum_score = 50
+            t.sizing_note = "Error saat filter — cek manual"
         return t
 
-    # ── Classify ──────────────────────────────────────────
     def _classify(self, t: Token) -> Token:
         if   t.mc < 100_000:   t.position_type = "LOWCAP"
         elif t.mc < 2_000_000: t.position_type = "MIDCAP"
         else:                   t.position_type = "HIGHCAP"
         return t
 
-    # ── Bonding curve detection (BARU v4.1) ───────────────
     def _detect_bonding_curve(self, t: Token) -> Token:
         """
-        Token di pump.fun bonding curve: Liq $0, belum graduate ke Raydium.
-        $earthcoin: Liq $0 saat di-scan → terbang ke $329K setelah graduate.
-
-        JANGAN skip hanya karena Liq $0.
-        Tandai sebagai is_bonding_curve = True → handle khusus di filter S2.
+        Bonding curve pump.fun: Liq = 0 tapi ada aktivitas (vol > 0).
+        MPGA case: Liq $0, Vol $0 → token idle/belum aktif (bukan bonding curve aktif).
+        Bedakan: bonding_curve_active vs idle_token.
         """
-        # Bonding curve: liq = 0 atau sangat kecil, tapi ada volume dan ada pairs
-        if t.liq <= 0 and t.vol1h > 0 and t.mc > 0:
-            t.is_bonding_curve = True
-        elif t.liq < 1000 and t.mc > 5000 and t.vol1h > 5000:
-            t.is_bonding_curve = True
+        if t.liq <= 0 and t.vol1h > 100 and t.mc > 0:
+            t.is_bonding_curve = True    # masih di pump.fun, ada aktivitas
         else:
             t.is_bonding_curve = False
         return t
 
-    # ── Clean Top10: exclude LP wallet ───────────────────
     def _clean_top10(self, t: Token) -> Token:
+        """Exclude LP wallet dari top10 (fix false positive $SIF)."""
         if not t.top_holders:
             return t
         raw = []
         for h in t.top_holders[:20]:
             pct = float(h.get("pct", 0) or 0)
-            if 0 < pct <= 1.0: pct *= 100
+            if 0 < pct <= 1.0:
+                pct *= 100
             raw.append((pct, h))
         if not raw:
             return t
@@ -232,48 +231,47 @@ class FilterEngine:
                 t.top10_source = "RugCheck (LP excluded)"
         return t
 
-    # ── Wash trading (threshold lebih ketat) ─────────────
     def _detect_wash_trading(self, t: Token) -> Token:
-        """
-        Hanya flag jika BENAR-BENAR artificial.
-        Belajar dari $earthcoin (+379% chg dengan banyak txn = organik).
-        """
+        """Hanya flag wash trading yang benar-benar extreme."""
         reasons   = []
         total_txn = t.buys1h + t.sells1h
 
-        # 1. Volume ada tapi ZERO txn
-        if t.vol1h > 1000 and total_txn == 0:
-            reasons.append(f"vol ${t.vol1h:,.0f} dengan 0 txn")
+        # Vol ada tapi zero txn (dan bukan bonding curve)
+        if t.vol1h > 1000 and total_txn == 0 and not t.is_bonding_curve:
+            if t.liq > 0:  # hanya jika sudah graduate
+                reasons.append(f"vol ${t.vol1h:,.0f} dengan 0 txn")
 
-        # 2. Avg tx sangat besar DAN txn sangat sedikit (<15)
+        # Avg tx sangat besar dengan txn sangat sedikit
         elif t.vol1h > 10000 and 0 < total_txn < 15:
-            avg = t.vol1h / total_txn
+            avg = safe_div(t.vol1h, total_txn, 0)
             if avg > 3000:
                 reasons.append(
                     f"avg tx ${avg:,.0f} dengan {total_txn} txn — tidak natural"
                 )
 
-        # 3. Vol > 20x liq (physically impossible) — tidak berlaku untuk bonding curve
+        # Vol > 20x liq (impossible) — skip untuk bonding curve
         if not t.is_bonding_curve and t.liq > 0 and t.vol1h > t.liq * 20:
-            reasons.append(f"vol {t.vol1h/t.liq:.0f}x liq — impossible")
+            reasons.append(
+                f"vol {safe_div(t.vol1h, t.liq, 0):.0f}x liq — impossible"
+            )
 
         t.wash_trading_flag   = len(reasons) > 0
         t.wash_trading_reason = " | ".join(reasons) if reasons else ""
         return t
 
-    # ── Cluster scoring ───────────────────────────────────
     def _detect_cluster(self, t: Token) -> Token:
         if not t.top_holders:
             t.cluster_risk   = "UNKNOWN"
             t.cluster_reason = "Data tidak tersedia"
-            t.cluster_score  = 40  # neutral-low
+            t.cluster_score  = 30
             return t
 
         holders = t.top_holders[:20]
         pcts, insider_count, insider_pct = [], 0, 0.0
         for h in holders:
             pct = float(h.get("pct", 0) or 0)
-            if 0 < pct <= 1.0: pct *= 100
+            if 0 < pct <= 1.0:
+                pct *= 100
             pcts.append(pct)
             if h.get("insider", False):
                 insider_count += 1
@@ -282,33 +280,27 @@ class FilterEngine:
         score   = 0
         reasons = []
 
-        # Insider wallets dari RugCheck (verified)
-        if insider_count >= 6:
-            score += 40; reasons.append(f"{insider_count} insiders ({insider_pct:.1f}%)")
-        elif insider_count >= 3:
-            score += 25; reasons.append(f"{insider_count} insiders ({insider_pct:.1f}%)")
-        elif insider_count >= 1:
-            score += 12; reasons.append(f"{insider_count} insider wallet")
+        if   insider_count >= 6: score += 40; reasons.append(f"{insider_count} insiders")
+        elif insider_count >= 3: score += 25; reasons.append(f"{insider_count} insiders")
+        elif insider_count >= 1: score += 12; reasons.append(f"{insider_count} insider")
 
-        # Top10 concentration
         top10_total = sum(pcts[:10])
-        if   top10_total > 75: score += 45; reasons.append(f"top10 {top10_total:.0f}% extreme")
-        elif top10_total > 65: score += 30; reasons.append(f"top10 {top10_total:.0f}% tinggi")
-        elif top10_total > 55: score += 15; reasons.append(f"top10 {top10_total:.0f}% moderate")
+        if   top10_total > 75: score += 45; reasons.append(f"top10 {top10_total:.0f}%")
+        elif top10_total > 65: score += 30; reasons.append(f"top10 {top10_total:.0f}%")
+        elif top10_total > 55: score += 15; reasons.append(f"top10 {top10_total:.0f}%")
 
-        # Single whale
         max_h = max(pcts[:10]) if pcts else 0
         if   max_h > 30: score += 25; reasons.append(f"whale {max_h:.1f}%")
         elif max_h > 20: score += 15; reasons.append(f"single {max_h:.1f}%")
         elif max_h > 15: score += 5
 
-        # Uniform distribution check (sangat ketat)
         if len(pcts) >= 8:
             valid = [p for p in pcts[:10] if p > 0.5]
             if len(valid) >= 6:
                 mx, mn = max(valid), min(valid)
                 if (mx - mn) < 0.3 and mn > 2.0:
-                    score += 20; reasons.append("uniform — 1 entitas banyak wallet")
+                    score += 20
+                    reasons.append("uniform distribution")
 
         score = min(100, max(0, score))
         t.cluster_score = score
@@ -318,101 +310,103 @@ class FilterEngine:
         elif score >= 31: t.cluster_risk = "MEDIUM"
         else:              t.cluster_risk = "LOW"
 
-        t.cluster_reason = (
-            " | ".join(reasons) if reasons
-            else f"Score {score}/100 — normal"
-        )
+        t.cluster_reason = " | ".join(reasons) if reasons else f"Score {score}/100 normal"
         return t
 
-    # ── Dev farm ──────────────────────────────────────────
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
-        if t.lp_burn == 0:
-            reasons.append("LP 0% — dev bisa cabut liq kapanpun")
-            risk = "HIGH"
-        elif t.lp_burn < 50:
-            reasons.append(f"LP {t.lp_burn:.0f}%")
-            risk = "MEDIUM"
+        if t.lp_burn == 0 and not t.is_bonding_curve:
+            reasons.append("LP 0%"); risk = "HIGH"
+        elif t.lp_burn < 50 and not t.is_bonding_curve:
+            reasons.append(f"LP {t.lp_burn:.0f}%"); risk = "MEDIUM"
         if t.mint_auth:
-            reasons.append("Mint auth aktif"); risk = "HIGH"
+            reasons.append("Mint auth"); risk = "HIGH"
         if t.risk_norm > 6:
             reasons.append(f"risk {t.risk_norm}/10")
             if risk == "LOW": risk = "MEDIUM"
         kws = ["dev","creator","deployer","farm","bundle","sniper"]
-        for (lvl,nm,dc,vl) in t.rc_risks:
-            if any(k in (nm+dc).lower() for k in kws):
+        for (lvl, nm, dc, vl) in t.rc_risks:
+            if any(k in (nm + dc).lower() for k in kws):
                 reasons.append(f"[{lvl}] {nm}")
-                if lvl == "danger":              risk = "HIGH"
+                if lvl == "danger":               risk = "HIGH"
                 elif lvl == "warn" and risk=="LOW": risk = "MEDIUM"
         t.dev_farm_risk   = risk
         t.dev_farm_reason = " | ".join(reasons) if reasons else "Clean"
         return t
 
-    # ── Fee health check (BARU v4.1) ─────────────────────
     def _check_fee_health(self, t: Token) -> Token:
         """
-        Pelajaran dari $MWGA dan $TOFU:
-        - $MWGA: MC $125K, Total Fees 1.68 SOL (~$240) = 0.19% dari MC → DANGER
-        - $TOFU: MC $116K, Total Fees 2.05 SOL (~$290) = 0.25% dari MC → DANGER
-        - Normal token: fees seharusnya 3-20% dari MC untuk membuktikan aktivitas organik
-
-        Note: RugCheck memberikan 'score' yang berkorelasi dengan fee activity.
-        Fee data juga ada di DexScreener sebagai 'totalFees' di pair info.
-        Kita estimasi dari data yang ada: risk_norm rendah + volume tinggi + MC tinggi
-        tapi liq rendah = red flag.
-
-        Proxy calculation:
-        - Jika ada rc_risks dengan keyword "low activity" atau "fee" = DANGER
-        - Vol1h / MC > 2x tapi txn sedikit = wash (sudah handle)
-        - MC > $50K dengan holder_count < 100 = suspicious fee structure
-        - risk_norm = 0 tapi ada banyak volume anomali = suspicious
+        FIX v4.2: holder_count_rc dari RugCheck TIDAK RELIABLE untuk token fresh.
+        
+        Masalah: Token fresh (<2h) biasanya hanya terindex 20 holders di RugCheck
+        padahal kenyataannya bisa 150-300+ holders di chain.
+        
+        $Meme: holder_count_rc=20, tapi channel shows 152 holders
+        $MPGA: holder_count_rc=20, tapi 4h kemudian 3020 holders
+        
+        Solusi:
+        - Hanya apply fee health check jika token >= 2 jam (RugCheck sudah index lebih)
+        - Atau jika holder_count_rc > 50 (ada cukup data)
+        - Token fresh: skip fee health check, gunakan data lain
+        
+        Rule yang berlaku (MATURE token >= 2h):
+        MC > $80K, holders < 200 → DANGER (terbukti dari $MWGA, $TOFU)
+        MC > $50K, holders < 100 → DANGER
         """
+        t.fee_health        = "HEALTHY"
+        t.fee_health_reason = "OK"
+
+        hc = t.holder_count_rc
+        is_mature = t.age_hours >= 2.0  # RugCheck butuh ~2 jam untuk index
+
+        # Untuk token fresh, skip fee health (data tidak akurat)
+        if not is_mature:
+            if hc < 50:
+                t.fee_health        = "HEALTHY"
+                t.fee_health_reason = f"Fresh token ({t.age_hours*60:.0f}m) — holder count belum akurat"
+            return t
+
+        # Untuk token mature (>= 2h): apply fee health check
+        if hc <= 0:
+            # Tidak ada data holder = tidak bisa check
+            t.fee_health        = "HEALTHY"
+            t.fee_health_reason = "No holder data"
+            return t
+
         reasons = []
         fh = "HEALTHY"
 
-        # Check 1: MC besar tapi holders sangat sedikit
-        # Belajar dari $MWGA ($125K, 126 holders → rug) dan $TOFU ($116K, 189 holders → rug)
-        # vs $SIF ($30K, 899 holders → ok) dan $TERMINAL ($87K, 1250 holders → ok)
-        # Rule: MC > $80K seharusnya punya > 200 organic holders
-        hc = t.holder_count_rc
-        if t.mc > 80000 and 0 < hc < 200:
+        # Rule 1: MC > $80K seharusnya punya > 200 organic holders
+        # (Terbukti dari $MWGA dan $TOFU case)
+        if t.mc > 80000 and hc < 200:
             reasons.append(
-                f"MC ${t.mc:,.0f} tapi hanya {hc} holders "
-                f"(normal: >200 untuk MC sebesar ini)"
+                f"MC ${t.mc:,.0f} dengan {hc} holders "
+                f"(normal: >200 untuk mature token sebesar ini)"
             )
             fh = "DANGER"
-        elif t.mc > 50000 and 0 < hc < 120:
+        elif t.mc > 50000 and hc < 120:
             reasons.append(
-                f"MC ${t.mc:,.0f} dengan {hc} holders — very suspicious"
+                f"MC ${t.mc:,.0f} dengan {hc} holders — suspicious"
             )
             fh = "DANGER"
-        elif t.mc > 30000 and 0 < hc < 80:
-            reasons.append(f"Holders {hc} untuk MC ${t.mc:,.0f} — low organik")
+        elif t.mc > 30000 and hc < 80:
+            reasons.append(f"Holders {hc} untuk MC ${t.mc:,.0f}")
             fh = "LOW"
 
-        # Check 2: Volume tinggi tapi MC tidak berkembang
-        # Jika vol24h > 5x MC = kemungkinan wash
-        if t.mc > 0 and t.vol24h > 0 and not t.is_bonding_curve:
-            vol_mc_24 = t.vol24h / t.mc
+        # Rule 2: Vol24h anomali vs holders (hanya untuk mature token)
+        if t.mc > 0 and t.vol24h > 0 and hc > 0:
+            vol_mc_24 = safe_div(t.vol24h, t.mc, 0)
             if vol_mc_24 > 10.0 and hc < 200:
                 reasons.append(
-                    f"Vol24h {vol_mc_24:.0f}x MC dengan {hc} holders — wash trading"
+                    f"Vol24h {vol_mc_24:.0f}x MC dengan {hc} holders"
                 )
-                if fh == "HEALTHY": fh = "LOW"
-
-        # Check 3: RugCheck risks yang terkait fee/activity
-        low_act_kws = ["low", "activity", "fee", "liquidity provider"]
-        for (lvl, nm, dc, vl) in t.rc_risks:
-            if any(k in (nm+dc).lower() for k in low_act_kws):
-                if lvl in ("danger","warn"):
-                    reasons.append(f"RugCheck: {nm}")
-                    if fh == "HEALTHY": fh = "LOW"
+                if fh == "HEALTHY":
+                    fh = "LOW"
 
         t.fee_health        = fh
         t.fee_health_reason = " | ".join(reasons) if reasons else "OK"
         return t
 
-    # ── Smart money ───────────────────────────────────────
     def _detect_smart_money(self, t: Token) -> Token:
         if not t.top_holders:
             t.smart_money_present = False
@@ -420,14 +414,15 @@ class FilterEngine:
         count, total = 0, 0.0
         for h in t.top_holders[:20]:
             pct = float(h.get("pct", 0) or 0)
-            if 0 < pct <= 1.0: pct *= 100
+            if 0 < pct <= 1.0:
+                pct *= 100
             if not h.get("insider", False) and 1.0 < pct < 15.0:
-                count += 1; total += pct
+                count += 1
+                total += pct
         t.smart_money_present = count >= 2
         t.smart_money_pct     = round(total, 1)
         return t
 
-    # ── Timing score ──────────────────────────────────────
     def _timing_score(self, t: Token) -> Token:
         hour = datetime.utcnow().hour
         dow  = datetime.utcnow().weekday()
@@ -442,7 +437,6 @@ class FilterEngine:
         t.timing_reason = r + (" (wknd)" if dow >= 5 else "")
         return t
 
-    # ── Momentum score ────────────────────────────────────
     def _momentum_score(self, t: Token) -> Token:
         score = 50
         c1 = t.chg1h
@@ -454,31 +448,34 @@ class FilterEngine:
         elif c1 > -10: score -= 3
         elif c1 > -20: score -= 10
         else:           score -= 20
+
         bsr = t.buy_sell_ratio
         if   bsr > 0.75: score += 15
         elif bsr > 0.60: score += 8
         elif bsr > 0.45: score += 2
         elif bsr < 0.30: score -= 10
         elif bsr < 0.40: score -= 5
+
         if t.liq > 0 and t.vol1h > 0:
-            vl = t.vol1h / t.liq
+            vl = safe_div(t.vol1h, t.liq, 0)
             if   vl > 3.0: score += 10
             elif vl > 1.0: score += 5
+
         t.momentum_score = max(0, min(100, score))
         return t
 
-    # ── Liq trap ──────────────────────────────────────────
     def _liq_trap(self, t: Token) -> Token:
         if t.mc <= 0 or t.liq <= 0 or t.is_bonding_curve:
             t.liq_trap_risk = False
             return t
-        t.liq_trap_risk = (t.liq / t.mc) > 0.80
+        t.liq_trap_risk = safe_div(t.liq, t.mc, 0) > 0.80
         return t
 
-    # ── Bounce potential ──────────────────────────────────
     def _bounce_potential(self, t: Token) -> Token:
         if t.age_hours < 24:
-            t.bounce_potential = False; t.bounce_reason = ""; return t
+            t.bounce_potential = False
+            t.bounce_reason    = ""
+            return t
         signals, score = [], 0
         if t.chg24h < -30 and t.vol24h > 5000:
             signals.append(f"correction {t.chg24h:.0f}%"); score += 2
@@ -494,7 +491,6 @@ class FilterEngine:
         t.bounce_reason    = " | ".join(signals)
         return t
 
-    # ── Holder health ─────────────────────────────────────
     def _holder_health(self, t: Token) -> Token:
         score = 50
         if t.top10_pct > 0:
@@ -512,25 +508,25 @@ class FilterEngine:
         if t.wash_trading_flag: score -= 20
         if   t.lp_burn >= 95: score += 15
         elif t.lp_burn >= 80: score += 8
-        elif t.lp_burn == 0:  score -= 10
-        elif t.lp_burn < 50:  score -= 5
+        elif t.lp_burn == 0 and not t.is_bonding_curve: score -= 10
+        elif 0 < t.lp_burn < 50: score -= 5
         if t.smart_money_present: score += 8
         if t.liq_trap_risk:       score -= 15
         if   t.risk_norm < 2: score += 10
         elif t.risk_norm < 4: score += 5
         elif t.risk_norm > 6: score -= 15
         hc = t.holder_count_rc
-        if   hc > 500: score += 10
-        elif hc > 200: score += 5
-        elif hc > 100: score += 2
-        elif 0 < hc < 50: score -= 15
-        # Fee health
+        # Hanya apply holder count jika mature (>= 2h)
+        if t.age_hours >= 2.0 and hc > 0:
+            if   hc > 500: score += 10
+            elif hc > 200: score += 5
+            elif hc > 100: score += 2
+            elif hc < 50:  score -= 10
         if t.fee_health == "DANGER": score -= 20
         elif t.fee_health == "LOW":  score -= 8
         t.holder_health = max(0, min(100, score))
         return t
 
-    # ── Apply filters ─────────────────────────────────────
     def _apply_filters(self, t: Token) -> Token:
         cfg   = self.cfg
         flags = 0
@@ -554,28 +550,34 @@ class FilterEngine:
             return t
 
         if t.wash_trading_flag:
-            bad("Wash Trading", t.wash_trading_reason[:80], "ARTIFICIAL ⛔")
+            bad("Wash Trading", t.wash_trading_reason[:80], "ARTIFICIAL")
 
         if t.liq_trap_risk:
-            bad("Liq Trap", f"Liq/MC {t.liq_mc_ratio:.1%} > 80% — rugpull setup",
+            bad("Liq Trap",
+                f"Liq/MC {t.liq_mc_ratio:.1%} > 80% — rugpull setup",
                 f"{t.liq_mc_ratio:.1%}")
 
         if t.cluster_risk == "CRITICAL":
             bad("Cluster CRITICAL",
-                f"Score {t.cluster_score}/100 — {t.cluster_reason[:55]}",
+                f"Score {t.cluster_score}/100 — {t.cluster_reason[:50]}",
                 "CRITICAL ⛔")
 
-        # Fee health check (BARU)
-        if t.fee_health == "DANGER":
-            bad("Fee/Holder Health",
+        # Fee health — hanya untuk mature token (>=2h)
+        # DANGER = langsung 2 flags (SKIP), bukan 1 flag
+        # Karena data RugCheck sudah reliable untuk token mature
+        if t.fee_health == "DANGER" and t.age_hours >= 2.0:
+            bad("Fee/Holder 1",
                 t.fee_health_reason[:70],
                 "DANGER ⛔")
+            bad("Fee/Holder 2",
+                "Token mature dengan holder sangat sedikit vs MC — rug indicator",
+                "SKIP")
 
         # S1: Authority
         if t.mint_auth:
-            bad("S1 Mint Auth", "AKTIF → dev cetak token → dilusi", "ACTIVE ⛔")
+            bad("S1 Mint Auth", "AKTIF — dev cetak token", "ACTIVE ⛔")
         elif t.freeze_auth:
-            bad("S1 Freeze Auth", "AKTIF → honeypot", "ACTIVE ⛔")
+            bad("S1 Freeze Auth", "AKTIF — honeypot", "ACTIVE ⛔")
         else:
             dn = [n for (lvl,n,d,v) in t.rc_risks
                   if lvl=="danger" and any(k in n.lower()
@@ -586,7 +588,7 @@ class FilterEngine:
                 lp = f"{t.lp_burn:.0f}% burned" if t.lp_burn > 0 else "N/A"
                 ok("S1 Authority", f"Revoked | LP {lp}", "Aman ✓")
 
-        # S2: MC & Liq — khusus handle bonding curve
+        # S2: MC & Liq
         if t.mc <= 0:
             bad("S2 MC", "Data tidak tersedia", "N/A")
         elif t.mc < cfg.MIN_MC:
@@ -594,10 +596,22 @@ class FilterEngine:
         elif t.mc > cfg.MAX_MC:
             bad("S2 MC", f"${t.mc:,.0f} > max ${cfg.MAX_MC:,.0f}", f"${t.mc:,.0f}")
         elif t.is_bonding_curve:
-            # Token di bonding curve: Liq $0 normal, jangan skip
+            # Bonding curve aktif: liq $0 wajar, bukan flag
             info("S2 Liq (Bonding Curve)",
-                 f"MC ${t.mc:,.0f} | Liq ~$0 (belum graduate)",
-                 "⚠ Masih di pump.fun — extra hati-hati, keluar sebelum graduate dump")
+                 f"MC ${t.mc:,.0f} | Liq ~$0",
+                 "⚠ Masih di pump.fun — exit sebelum graduate dump")
+        elif t.liq <= 0 and t.vol1h <= 0:
+            # Token idle: liq $0 dan vol $0
+            if t.age_hours > 1.0:
+                # Old token yang tidak aktif = 1 flag (WATCH dulu)
+                bad("S2 Liq (Idle)",
+                    f"MC ${t.mc:,.0f} Liq $0 Vol $0 — token idle/mati",
+                    "IDLE ⚠")
+            else:
+                # Fresh token belum ada data = info saja
+                info("S2 Liq (No data)",
+                     f"MC ${t.mc:,.0f} | Data belum masuk",
+                     "Fresh — tunggu data masuk")
         elif t.liq < cfg.MIN_LIQ:
             bad("S2 Liq", f"${t.liq:,.0f} < min ${cfg.MIN_LIQ:,.0f}", f"${t.liq:,.0f}")
         else:
@@ -605,15 +619,13 @@ class FilterEngine:
             if r < 0.04:
                 bad("S2 Liq/MC", f"{r:.1%} < 4%", f"{r:.1%}")
             else:
-                ok("S2 MC & Liq",
-                   f"MC ${t.mc:,.0f} | Liq ${t.liq:,.0f} ({r:.1%})",
-                   "Valid ✓")
+                ok("S2 MC & Liq", f"MC ${t.mc:,.0f} | Liq ${t.liq:,.0f} ({r:.1%})", "✓")
 
         # S3: Top10
         if t.top10_pct == 0:
             info("S3 Top10", f"N/A ({t.top10_source})", "Cek Solscan")
         elif t.top10_pct > 70:
-            bad("S3 Top10", f"{t.top10_pct:.1f}% > 70% → CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
+            bad("S3 Top10", f"{t.top10_pct:.1f}% > 70% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
         elif t.top10_pct > cfg.MAX_TOP10_PCT:
             bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT}%", f"{t.top10_pct:.1f}%")
         else:
@@ -622,7 +634,7 @@ class FilterEngine:
         # S4: Risk & LP
         rn = t.risk_norm
         if rn > 7:
-            bad("S4 Risk", f"{rn}/10 [{t.risk_label.upper()}] — BAHAYA", f"{rn}/10 ⛔")
+            bad("S4 Risk", f"{rn}/10 [{t.risk_label.upper()}] BAHAYA", f"{rn}/10 ⛔")
         elif rn > cfg.MAX_RISK_NORM:
             bad("S4 Risk", f"{rn}/10 > max {cfg.MAX_RISK_NORM}", f"{rn}/10")
         elif t.lp_burn == 0 and not t.is_bonding_curve:
@@ -630,15 +642,16 @@ class FilterEngine:
         elif 0 < t.lp_burn < 80:
             bad("S4 LP Burn", f"{t.lp_burn:.0f}% < 80%", f"{t.lp_burn:.0f}%")
         else:
-            lp = f"{t.lp_burn:.0f}%" if t.lp_burn > 0 else ("Bonding Curve" if t.is_bonding_curve else "N/A")
-            ok("S4 Risk & LP", f"{rn}/10 [{t.risk_label}] | LP {lp}", "OK ✓")
+            lp_str = (f"{t.lp_burn:.0f}%" if t.lp_burn > 0
+                      else ("BC" if t.is_bonding_curve else "N/A"))
+            ok("S4 Risk & LP", f"{rn}/10 [{t.risk_label}] | LP {lp_str}", "OK ✓")
 
         # S5: Cluster
         cs, cr = t.cluster_score, t.cluster_risk
         if cr == "HIGH":
-            bad("S5 Cluster", f"Score {cs}/100 — {t.cluster_reason[:55]}", f"HIGH ({cs})")
+            bad("S5 Cluster", f"Score {cs}/100 — {t.cluster_reason[:50]}", f"HIGH ({cs})")
         elif cr == "MEDIUM":
-            info("S5 Cluster", f"Score {cs}/100", t.cluster_reason[:55])
+            info("S5 Cluster", f"Score {cs}/100", t.cluster_reason[:50])
         elif cr == "LOW":
             ok("S5 Cluster", f"Score {cs}/100", "Distribusi aman ✓")
         else:
@@ -652,63 +665,55 @@ class FilterEngine:
         else:
             ok("S6 Dev Farm", "LOW", "Clean ✓")
 
-        # Bonus: Socials
+        # Bonus
         soc = [s for s,b in [("TW",t.has_twitter),("TG",t.has_telegram),("Web",t.has_website)] if b]
         if soc: ok("Social", ", ".join(soc), "✓")
         else:   info("Social", "NONE", "Dev anonim")
 
-        # Bonus: Momentum
         ms = t.momentum_score
         if   ms >= 75: ok("Momentum",   f"{ms}/100", f"Bullish — {t.chg1h:+.1f}%")
         elif ms >= 55: ok("Momentum",   f"{ms}/100", f"OK — {t.chg1h:+.1f}%")
         elif ms >= 35: info("Momentum",  f"{ms}/100", f"Neutral — {t.chg1h:+.1f}%")
         else:          info("Momentum",  f"{ms}/100", f"Bearish — {t.chg1h:+.1f}%")
 
-        # Bonus: Smart money
         if t.smart_money_present:
             ok("Smart Money", f"{t.smart_money_pct:.1f}%", "GAKE hold ✓")
 
-        # Bonus: Buy/Sell
         total_tx = t.buys1h + t.sells1h
         if total_tx > 0:
             bsr = t.buy_sell_ratio
             label = f"{t.buys1h}B/{t.sells1h}S ({bsr:.0%})"
-            if   bsr > 0.65: ok("Buy/Sell",   label, "Buying pressure ✓")
+            if   bsr > 0.65: ok("Buy/Sell",   label, "Buy pressure ✓")
             elif bsr < 0.35: info("Buy/Sell",  label, "Sell dominan ⚠")
             else:             info("Buy/Sell",  label, "Balanced")
 
-        # Bonus: Timing
         tc = t.timing_score
         if   tc >= 70: ok("Timing",   f"{tc}/100", t.timing_reason)
         elif tc >= 40: info("Timing",  f"{tc}/100", t.timing_reason)
         else:           info("Timing", f"{tc}/100", f"⚠ {t.timing_reason}")
 
-        # Bonus: Age
         if t.age_hours > 0:
             age = f"{t.age_hours*60:.0f}m" if t.age_hours < 1 else f"{t.age_hours:.1f}h"
-            if   t.age_hours < 0.25: info("Age", age, "Very fresh <15m — hati-hati")
+            if   t.age_hours < 0.25: info("Age", age, "Very fresh <15m")
             elif t.age_hours < 1:    ok("Age",   age, "Fresh <1h ✓")
             elif t.age_hours <= 12:  ok("Age",   age, "Fresh ✓")
-            elif t.bounce_potential: info("Age",  age, f"Old + bounce: {t.bounce_reason[:30]}")
+            elif t.bounce_potential: info("Age",  age, f"Old + bounce")
             else:                    info("Age",  age, "Old — cek thesis")
 
-        # Bonus: Holders
         hc = t.holder_count_rc
         if hc > 0:
             if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
             elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")
             elif hc > 100: info("Holders",  f"{hc}", "Moderate")
-            elif hc > 50:  info("Holders",  f"{hc}", "⚠ Sedikit — exit liquidity tipis")
-            else:           info("Holders", f"{hc}", "⚠ Sangat sedikit (<50)")
+            elif hc > 50:  info("Holders",  f"{hc}", "⚠ Sedikit")
+            elif t.age_hours >= 2.0:
+                info("Holders", f"{hc}", "⚠ Sangat sedikit (mature token)")
+            else:
+                info("Holders", f"{hc}", "Fresh — belum ter-index semua")
 
-        # Bonus: Fee health
-        if t.fee_health == "HEALTHY":
-            ok("Fee Health", "HEALTHY", "Aktivitas organik ✓")
-        elif t.fee_health == "LOW":
-            info("Fee Health", "LOW", t.fee_health_reason[:55])
-        # DANGER sudah di-handle di atas sebagai bad flag
+        if   t.fee_health == "HEALTHY": ok("Fee Health",   "OK", "✓")
+        elif t.fee_health == "LOW":     info("Fee Health",  "LOW", t.fee_health_reason[:50])
 
-        # Bonus: Holder health
         hh = t.holder_health
         if   hh >= 75: ok("Hldr Health",   f"{hh}/100", "Sangat sehat ✓")
         elif hh >= 55: ok("Hldr Health",   f"{hh}/100", "Sehat ✓")
@@ -724,41 +729,54 @@ class FilterEngine:
 
         return t
 
-    # ── Build plan ────────────────────────────────────────
     def _build_plan(self, t: Token) -> Token:
-        cfg = self.cfg
+        cfg           = self.cfg
         t.sizing_note = ""
 
         if t.flags >= 2 or t.verdict in ("RUGGED", "ERROR"):
-            t.plan = {}; t.sizing_note = "Jangan masuk."; return t
+            t.plan = {}
+            t.sizing_note = "Jangan masuk."
+            return t
 
         p = t.price
         if p <= 0:
-            t.sizing_note = "Price tidak tersedia."; return t
+            t.sizing_note = "Price tidak tersedia."
+            return t
 
         if t.position_type == "LOWCAP":
             tp1, tp2, sl, dca1, dca2, max_p = 30, 50, 20, 20, 35, 0.10
             note = (f"LOWCAP: max {max_p*100:.0f}% portfolio "
-                    f"(~{cfg.PORTFOLIO_SOL*max_p:.3f} SOL). Exit cepat di TP1.")
+                    f"(~{cfg.PORTFOLIO_SOL * max_p:.3f} SOL). Exit cepat di TP1.")
         elif t.position_type == "MIDCAP":
             tp1, tp2, sl, dca1, dca2, max_p = 30, 70, 25, 20, 35, 0.20
             note = (f"MIDCAP: max {max_p*100:.0f}% portfolio "
-                    f"(~{cfg.PORTFOLIO_SOL*max_p:.3f} SOL). Hold lebih lama.")
+                    f"(~{cfg.PORTFOLIO_SOL * max_p:.3f} SOL). Hold lebih lama.")
         else:
             tp1, tp2, sl, dca1, dca2, max_p = 20, 50, 15, 15, 25, 0.25
             note = (f"HIGHCAP: max {max_p*100:.0f}% portfolio "
-                    f"(~{cfg.PORTFOLIO_SOL*max_p:.3f} SOL). TA lebih relevan.")
+                    f"(~{cfg.PORTFOLIO_SOL * max_p:.3f} SOL). TA lebih relevan.")
 
-        if t.flags == 1:      max_p = round(max_p*0.5, 3); note = f"1 flag → half size. {note}"
-        if t.cluster_risk == "MEDIUM": max_p = round(max_p*0.8, 3)
-        if t.cluster_risk == "HIGH":   max_p = round(max_p*0.6, 3)
-        if t.is_bonding_curve: note += " ⚠ Bonding curve — set SL ketat, jual sebelum graduate dump."
-        if t.timing_score < 40: note += " ⚠ Timing kurang optimal."
-        if t.momentum_score >= 75 and t.flags == 0: note += " 🚀 Momentum kuat!"
+        if t.flags == 1:
+            max_p = round(max_p * 0.5, 3)
+            note  = f"1 flag → half size. {note}"
+        if t.cluster_risk == "MEDIUM":
+            max_p = round(max_p * 0.8, 3)
+        if t.cluster_risk == "HIGH":
+            max_p = round(max_p * 0.6, 3)
+        if t.is_bonding_curve:
+            note += " ⚠ Bonding curve — SL ketat, jual sebelum graduate."
+        if t.timing_score < 40:
+            note += " ⚠ Timing kurang optimal."
+        if t.momentum_score >= 75 and t.flags == 0:
+            note += " 🚀 Momentum kuat!"
 
         t.plan = {
-            "entry": p, "tp1": p*(1+tp1/100), "tp2": p*(1+tp2/100),
-            "sl": p*(1-sl/100), "dca1": p*(1-dca1/100), "dca2": p*(1-dca2/100),
+            "entry": p,
+            "tp1":   p * (1 + tp1  / 100),
+            "tp2":   p * (1 + tp2  / 100),
+            "sl":    p * (1 - sl   / 100),
+            "dca1":  p * (1 - dca1 / 100),
+            "dca2":  p * (1 - dca2 / 100),
             "tp1_pct": tp1, "tp2_pct": tp2, "sl_pct": sl,
             "dca1_pct": dca1, "dca2_pct": dca2, "max_port": max_p,
         }
