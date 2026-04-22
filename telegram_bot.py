@@ -119,8 +119,9 @@ class TelegramBot:
 └ Mint: {mint_str}
 
 🧠 <b>Sambelikan Analysis</b>
-├ Cluster: {cluster}  Dev Farm: {dev_f}
+├ Cluster: {cluster} ({cs}/100)  Dev Farm: {dev_f}
 ├ Smart Money: {sm_str}  Timing: {timing}/100
+├ Momentum: {mom_emoji} {momentum}/100  Holders: {hcount_str}
 ├ Flags: {flags}{bounce_str}
 
 🤖 <b>{dec_action} [{dec_conv}]</b>
