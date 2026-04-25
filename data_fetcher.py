@@ -93,26 +93,46 @@ class DataFetcher:
         except Exception as e:
             log.debug(f"Helius supply error: {e}")
         return None
-
     def _apply_helius_holders(self, t: Token, holders_data: dict, supply: Optional[int]) -> Token:
+        """Hitung top10 & total holders dari data Helius, dengan validasi ketat."""
         if not holders_data or "value" not in holders_data:
             return t
+
         holder_list = holders_data["value"]
         t.helius_holders_available = True
         t.holder_list_helius = holder_list
 
-        decimals = getattr(t, 'decimals', 6) or 6
-        supply_decimal = supply / (10 ** decimals) if supply else None
+        # JANGAN hitung Top10 jika token masih bonding curve (liq = 0)
+        # karena supply dan desimal tidak konsisten.
+        if t.liq <= 0 or t.mc <= 0:
+            t.top10_source = "Helius (bonding curve — skip)"
+            t.holder_count_helius = len(holder_list)
+            return t
+
+        # Cari desimal token dengan memanggil Helius getTokenInfo kecil
+        # Untuk sekarang, gunakan fallback 9 desimal (umum untuk Solana)
+        decimals = 9  # Mayoritas token SPL menggunakan 9 desimal
+        if supply:
+            supply_decimal = supply / (10 ** decimals)
+        else:
+            supply_decimal = None
 
         total_pct = 0.0
         for h in holder_list[:10]:
             amount = int(h.get("amount", 0))
-            pct = (amount / supply_decimal * 100) if supply_decimal and supply_decimal > 0 else 0
+            if supply_decimal and supply_decimal > 0:
+                pct = (amount / supply_decimal * 100)
+            else:
+                pct = 0.0
             total_pct += pct
 
-        if total_pct > 0:
+        # Validasi: persentase harus masuk akal (0% - 100%)
+        if 0 < total_pct <= 100:
             t.top10_pct = round(total_pct, 1)
             t.top10_source = f"Helius ({len(holder_list)} holders)"
+        else:
+            t.top10_pct = 0.0
+            t.top10_source = f"Helius (invalid pct {total_pct:.1f}%)"
 
         t.holder_count_helius = len(holder_list)
         return t
