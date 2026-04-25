@@ -1,10 +1,5 @@
 """
-filter_engine.py — PONYIN AI AGENT v5.0
-=========================================
-- Helius untuk holder akurat
-- BC detection via pair_addr
-- Toleransi LP 0% untuk token fresh volume tinggi
-- Token mati (liq<10) tidak di-flag
+filter_engine.py — PONYIN AI AGENT v6.0 (GMGN + Helius + RugCheck)
 """
 import re, logging
 from datetime import datetime
@@ -56,10 +51,19 @@ class Token:
     pair_addr: str = ""
     created: str = ""
     age_hours: float = 0.0
-    # Helius
-    helius_holders_available: bool = False
-    holder_list_helius: list = field(default_factory=list)
-    holder_count_helius: int = 0
+    # GMGN data
+    gmgn_data: Optional[dict] = None
+    holder_count_gmgn: int = 0
+    dev_hold_pct: float = 0.0
+    bundle_pct: float = 0.0
+    sniper_count: int = 0
+    smart_money_count: int = 0
+    kol_holders: int = 0
+    rat_trader_rate: float = 0.0
+    is_honeypot: bool = False
+    rug_ratio: float = 0.0
+    wash_trade_gmgn: bool = False
+    fresh_wallet_rate: float = 0.0
     # Advanced
     wash_trading_flag: bool = False
     wash_trading_reason: str = ""
@@ -151,6 +155,10 @@ class FilterEngine:
             t = self._classify(t)
             t = self._detect_bonding_curve(t)
             t = self._clean_top10(t)
+            # Analisis data GMGN jika tersedia
+            if hasattr(t, 'gmgn_data') and t.gmgn_data:
+                t = self._analyze_gmgn_holders(t, t.gmgn_data)
+                t = self._analyze_gmgn_security(t, t.gmgn_data)
             t = self._detect_wash_trading(t)
             t = self._detect_cluster(t)
             t = self._detect_dev_farm(t)
@@ -194,6 +202,50 @@ class FilterEngine:
         # sederhana, tetap ada
         return t
 
+    # ── GMGN Analysis Methods ──────────────────────────────
+    def _analyze_gmgn_holders(self, t: Token, data: dict) -> Token:
+        """Ambil Top10, holder count, dev supply, bundle % dari GMGN."""
+        # Top 10
+        top10 = data.get("top_10_holder_pct")
+        if top10 is not None and 0 < top10 <= 100:
+            t.top10_pct = round(float(top10), 1)
+            t.top10_source = "GMGN"
+
+        # Holder count
+        hc = data.get("holder_count")
+        if hc:
+            t.holder_count_gmgn = int(hc)
+
+        # Dev supply (penting: harus 0% sesuai Sambelikan)
+        dev = data.get("dev_hold_pct")
+        if dev is not None:
+            t.dev_hold_pct = float(dev)
+
+        # Bundle % (penting: harus < 40% sesuai Sambelikan)
+        bundle = data.get("bundle_pct") or data.get("bundler_trader_amount_rate")
+        if bundle is not None:
+            t.bundle_pct = float(bundle)
+
+        return t
+
+    def _analyze_gmgn_security(self, t: Token, data: dict) -> Token:
+        """Ambil data keamanan dari GMGN: sniper, honeypot, rug, smart money."""
+        t.sniper_count = int(data.get("sniper_count") or 0)
+        t.rat_trader_rate = float(data.get("rat_trader_amount_rate") or 0)
+        t.smart_money_count = int(data.get("smart_degen_count") or 0)
+        t.kol_holders = int(data.get("renowned_wallets") or 0)
+        t.is_honeypot = bool(data.get("is_honeypot"))
+        t.rug_ratio = float(data.get("rug_ratio") or 0)
+        t.wash_trade_gmgn = bool(data.get("wash_trade_flag"))
+        t.fresh_wallet_rate = float(data.get("fresh_wallet_rate") or 0)
+
+        # Smart money presence
+        if t.smart_money_count > 0:
+            t.smart_money_present = True
+
+        return t
+
+    # ── Wash Trading ────────────────────────────────────
     def _detect_wash_trading(self, t: Token) -> Token:
         reasons = []
         total_txn = t.buys1h + t.sells1h
@@ -209,6 +261,7 @@ class FilterEngine:
         t.wash_trading_reason = " | ".join(reasons)
         return t
 
+    # ── Cluster ────────────────────────────────────────
     def _detect_cluster(self, t: Token) -> Token:
         if not t.top_holders:
             t.cluster_risk = "UNKNOWN"; t.cluster_reason = "Data tidak tersedia"; t.cluster_score = 30
@@ -242,13 +295,12 @@ class FilterEngine:
         t.cluster_reason = " | ".join(reasons) if reasons else f"Score {score}/100 normal"
         return t
 
+    # ── Dev Farm ────────────────────────────────────────
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
-        # LP burn 0% hanya berbahaya jika token sudah tidak fresh dan volume rendah
         if t.lp_burn == 0 and not t.is_bonding_curve:
             if t.age_hours < 1.0 and t.vol1h > t.liq * 2:
                 reasons.append("LP 0% (fresh, high vol — tolerable)")
-                # tetap LOW risk
             else:
                 reasons.append("LP 0%"); risk = "HIGH"
         elif t.lp_burn < 50 and not t.is_bonding_curve:
@@ -272,9 +324,9 @@ class FilterEngine:
     def _check_fee_health(self, t: Token) -> Token:
         t.fee_health = "HEALTHY"
         t.fee_health_reason = "OK"
-        if hasattr(t, 'holder_count_helius') and t.holder_count_helius > 0:
-            holder_count = t.holder_count_helius
-            source = "Helius"
+        if hasattr(t, 'holder_count_gmgn') and t.holder_count_gmgn > 0:
+            holder_count = t.holder_count_gmgn
+            source = "GMGN"
         elif t.holder_count_rc > 0 and t.age_hours >= 6.0:
             holder_count = t.holder_count_rc
             source = "RugCheck(mature)"
@@ -283,7 +335,7 @@ class FilterEngine:
             return t
         reasons = []
         fh = "HEALTHY"
-        if source == "Helius":
+        if source == "GMGN":
             if t.mc > 100_000 and holder_count < 80:
                 reasons.append(f"MC ${t.mc:,.0f} tapi hanya {holder_count} holders")
                 fh = "DANGER"
@@ -397,7 +449,7 @@ class FilterEngine:
         if   t.risk_norm < 2: score += 10
         elif t.risk_norm < 4: score += 5
         elif t.risk_norm > 6: score -= 15
-        hc = t.holder_count_helius if hasattr(t, 'holder_count_helius') else t.holder_count_rc
+        hc = t.holder_count_gmgn if hasattr(t, 'holder_count_gmgn') else t.holder_count_rc
         if hc > 0:
             if   hc > 500: score += 10
             elif hc > 200: score += 5
@@ -455,7 +507,6 @@ class FilterEngine:
         if t.mc <= 0:
             bad("S2 MC", "Data tidak tersedia", "N/A")
         elif t.mc < cfg.MIN_MC and not t.is_bonding_curve:
-            # Kecualikan token mati (liq sangat kecil) dari flag MC
             if t.pair_addr and t.liq < 10:
                 info("S2 MC", f"MC ${t.mc:,.0f} kecil tapi token mati (liq ${t.liq:.2f})", "Dead")
             else:
@@ -479,11 +530,11 @@ class FilterEngine:
 
         # S3 Top10
         if t.top10_pct == 0:
-            info("S3 Top10", f"N/A ({t.top10_source})", "Cek Solscan")
-        elif t.top10_pct > 70:
-            bad("S3 Top10", f"{t.top10_pct:.1f}% > 70% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
-        elif t.top10_pct > cfg.MAX_TOP10_PCT:
-            bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT}%", f"{t.top10_pct:.1f}%")
+            info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual")
+        elif t.top10_pct > 55:
+            bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
+        elif t.top10_pct > 30:
+            bad("S3 Top10", f"{t.top10_pct:.1f}% > 30%", f"{t.top10_pct:.1f}%")
         else:
             ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
 
@@ -522,7 +573,36 @@ class FilterEngine:
         else:
             ok("S6 Dev Farm", "LOW", "Clean ✓")
 
-        # Bonus
+        # ── S7 — GMGN Security ──────────────────────────────
+        if hasattr(t, 'is_honeypot') and t.is_honeypot:
+            bad("S7 Honeypot", "Terdeteksi honeypot oleh GMGN", "HONEYPOT ⛔")
+
+        if hasattr(t, 'rug_ratio') and t.rug_ratio > 0.5:
+            bad("S7 Rug Ratio", f"Rug ratio {t.rug_ratio:.2f} — high risk", f"{t.rug_ratio:.2f}")
+
+        if hasattr(t, 'wash_trade_gmgn') and t.wash_trade_gmgn:
+            bad("S7 Wash Trade", "GMGN mendeteksi wash trading", "WASH ⚠")
+
+        if hasattr(t, 'dev_hold_pct') and t.dev_hold_pct > 3:
+            bad("S7 Dev Supply", f"Dev hold {t.dev_hold_pct:.1f}% — belum lepas semua", f"{t.dev_hold_pct:.1f}%")
+
+        if hasattr(t, 'bundle_pct') and t.bundle_pct > 40:
+            bad("S7 Bundle", f"Bundle {t.bundle_pct:.1f}% > 40%", f"{t.bundle_pct:.1f}%")
+
+        if hasattr(t, 'sniper_count') and t.sniper_count > 10:
+            bad("S7 Sniper", f"{t.sniper_count} sniper wallets — potensi dump", f"{t.sniper_count}")
+
+        if hasattr(t, 'rat_trader_rate') and t.rat_trader_rate > 0.3:
+            bad("S7 Insider", f"Rat trader rate {t.rat_trader_rate:.1%} — insider dominated", f"{t.rat_trader_rate:.1%}")
+
+        # Bonus: smart money & KOL
+        if hasattr(t, 'smart_money_count') and t.smart_money_count > 5:
+            ok("Smart Money", f"{t.smart_money_count} smart degens", "Bullish ✓")
+
+        if hasattr(t, 'kol_holders') and t.kol_holders > 0:
+            ok("KOL Holders", f"{t.kol_holders} KOLs", "Atensi ✓")
+
+        # ── Bonus filters ────────────────────────────────────
         soc = [s for s,b in [("TW",t.has_twitter),("TG",t.has_telegram),("Web",t.has_website)] if b]
         if soc: ok("Social", ", ".join(soc), "✓")
         else:   info("Social", "NONE", "Dev anonim")
@@ -557,7 +637,7 @@ class FilterEngine:
             elif t.bounce_potential: info("Age",  age, f"Old + bounce")
             else:                    info("Age",  age, "Old — cek thesis")
 
-        hc = t.holder_count_helius if hasattr(t, 'holder_count_helius') else t.holder_count_rc
+        hc = t.holder_count_gmgn if hasattr(t, 'holder_count_gmgn') else t.holder_count_rc
         if hc > 0:
             if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
             elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")
