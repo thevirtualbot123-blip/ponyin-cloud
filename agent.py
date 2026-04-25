@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PONYIN AI AGENT v5.0 — Helius + Timeout Fix
+PONYIN AI AGENT v6.0 — GMGN Integration + Direct /check
 """
 import asyncio, sys, os, json, logging
 from datetime import datetime
@@ -37,7 +37,7 @@ def banner():
     print(f"""
 {C}{B}
 ╔══════════════════════════════════════════════════════════════════╗
-║       PONYIN AI AGENT v5.0 — Helius + Real-time Holders        ║
+║     PONYIN AI AGENT v6.0 — GMGN + Direct Check                 ║
 ╚══════════════════════════════════════════════════════════════════╝{R}
 """)
 
@@ -182,7 +182,7 @@ class PonyinAgent:
         log.info(f"Bot cmd: {command} args={args[:30]}")
         if command in ("/start", "/help"):
             await self.bot.send(
-                "🤖 <b>PONYIN AI AGENT v5.0</b>\n\n"
+                "🤖 <b>PONYIN AI AGENT v6.0</b>\n\n"
                 "<b>Commands:</b>\n"
                 "/scan — scan token baru sekali\n"
                 "/check &lt;CA&gt; — analisis satu token\n"
@@ -217,32 +217,44 @@ class PonyinAgent:
                         })
             except Exception as e:
                 await self.bot.send(f"❌ Error scan: {str(e)[:100]}")
+
         elif command in ("/check", "/c"):
             mint = args.strip()
             if len(mint) < 32:
-                await self.bot.send("⚠️ Format: /check &lt;CA&gt;")
+                await self.bot.send("⚠️ Format: /check <CA>")
                 return
             await self.bot.send(f"🔍 Menganalisis...\n<code>{mint}</code>")
             self._processed.pop(mint, None)
-            await self._queue.put({
-                "source": "BOT_CHECK",
-                "mint": mint,
-                "raw": "Manual check",
-                "ts": datetime.now().isoformat(),
-                "manual": True,
-            })
+            # LANGSUNG PROSES, tidak lewat queue
+            try:
+                await self.process_signal({
+                    "source": "BOT_CHECK",
+                    "mint": mint,
+                    "raw": "Manual check",
+                    "ts": datetime.now().isoformat(),
+                    "manual": True,
+                })
+            except Exception as e:
+                log.error(f"Check error: {e}", exc_info=True)
+                await self.bot.send(f"⚠️ Error: {str(e)[:100]}")
+
         else:
             ca = command.lstrip("/").strip()
             if len(ca) >= 32 and " " not in ca:
                 await self.bot.send(f"🔍 Menganalisis...\n<code>{ca}</code>")
                 self._processed.pop(ca, None)
-                await self._queue.put({
-                    "source": "BOT_DIRECT",
-                    "mint": ca,
-                    "raw": "Direct CA",
-                    "ts": datetime.now().isoformat(),
-                    "manual": True,
-                })
+                # LANGSUNG PROSES, tidak lewat queue
+                try:
+                    await self.process_signal({
+                        "source": "BOT_DIRECT",
+                        "mint": ca,
+                        "raw": "Direct CA",
+                        "ts": datetime.now().isoformat(),
+                        "manual": True,
+                    })
+                except Exception as e:
+                    log.error(f"Check error: {e}", exc_info=True)
+                    await self.bot.send(f"⚠️ Error: {str(e)[:100]}")
             else:
                 await self.bot.send(f"❓ Command tidak dikenal: {command}")
 
@@ -353,11 +365,11 @@ class PonyinAgent:
     async def run(self):
         banner()
         is_cloud = bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT"))
-        print(f"{G}PONYIN AGENT v5.0 starting...{R}")
+        print(f"{G}PONYIN AGENT v6.0 starting...{R}")
         print(f"  Mode       : {'☁ Cloud' if is_cloud else '💻 Local'}")
         print(f"  Bot token  : {'✓ Set' if self.cfg.BOT_TOKEN else '✗ Tidak ada'}")
         print(f"  Signal ch  : {', '.join(self.cfg.SIGNAL_CHANNELS) or 'none'}")
-        print(f"  Helius     : {'✓ Enabled' if self.cfg.HELIUS_ENABLED else '✗ Tidak ada'}")
+        print(f"  GMGN       : {'✓ Enabled' if True else '✗ Tidak ada'}")
         print()
 
         tasks = [
