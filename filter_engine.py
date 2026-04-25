@@ -2,8 +2,9 @@
 filter_engine.py — PONYIN AI AGENT v5.0
 =========================================
 - Helius untuk holder akurat
-- Threshold longgar untuk token fresh
-- Wash trading dikalibrasi ulang
+- BC detection via pair_addr
+- Toleransi LP 0% untuk token fresh volume tinggi
+- Token mati (liq<10) tidak di-flag
 """
 import re, logging
 from datetime import datetime
@@ -176,6 +177,13 @@ class FilterEngine:
         return t
 
     def _detect_bonding_curve(self, t: Token) -> Token:
+        """
+        Bonding curve pump.fun: Liq = 0 atau sangat kecil, tapi belum punya pair address.
+        Jika sudah ada pair_addr (pernah graduate), maka bukan bonding curve.
+        """
+        if t.pair_addr:
+            t.is_bonding_curve = False
+            return t
         if t.liq <= 0 and t.vol1h > 100 and t.mc > 0:
             t.is_bonding_curve = True
         else:
@@ -189,7 +197,6 @@ class FilterEngine:
     def _detect_wash_trading(self, t: Token) -> Token:
         reasons = []
         total_txn = t.buys1h + t.sells1h
-        # Hanya curigai jika volume sangat ekstrem vs likuiditas
         if not t.is_bonding_curve and t.liq > 0 and t.vol1h > 0:
             ratio = safe_div(t.vol1h, t.liq)
             if ratio > 50 and t.vol1h > 20_000:
@@ -203,7 +210,6 @@ class FilterEngine:
         return t
 
     def _detect_cluster(self, t: Token) -> Token:
-        # sama seperti sebelumnya
         if not t.top_holders:
             t.cluster_risk = "UNKNOWN"; t.cluster_reason = "Data tidak tersedia"; t.cluster_score = 30
             return t
@@ -238,9 +244,18 @@ class FilterEngine:
 
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
-        if t.lp_burn == 0 and not t.is_bonding_curve: reasons.append("LP 0%"); risk = "HIGH"
-        elif t.lp_burn < 50 and not t.is_bonding_curve: reasons.append(f"LP {t.lp_burn:.0f}%"); risk = "MEDIUM"
-        if t.mint_auth: reasons.append("Mint auth"); risk = "HIGH"
+        # LP burn 0% hanya berbahaya jika token sudah tidak fresh dan volume rendah
+        if t.lp_burn == 0 and not t.is_bonding_curve:
+            if t.age_hours < 1.0 and t.vol1h > t.liq * 2:
+                reasons.append("LP 0% (fresh, high vol — tolerable)")
+                # tetap LOW risk
+            else:
+                reasons.append("LP 0%"); risk = "HIGH"
+        elif t.lp_burn < 50 and not t.is_bonding_curve:
+            reasons.append(f"LP {t.lp_burn:.0f}%")
+            if risk == "LOW": risk = "MEDIUM"
+        if t.mint_auth:
+            reasons.append("Mint auth"); risk = "HIGH"
         if t.risk_norm > 6:
             reasons.append(f"risk {t.risk_norm}/10")
             if risk == "LOW": risk = "MEDIUM"
@@ -248,17 +263,15 @@ class FilterEngine:
         for (lvl, nm, dc, vl) in t.rc_risks:
             if any(k in (nm + dc).lower() for k in kws):
                 reasons.append(f"[{lvl}] {nm}")
-                if lvl == "danger": risk = "HIGH"
+                if lvl == "danger":               risk = "HIGH"
                 elif lvl == "warn" and risk=="LOW": risk = "MEDIUM"
-        t.dev_farm_risk = risk
+        t.dev_farm_risk   = risk
         t.dev_farm_reason = " | ".join(reasons) if reasons else "Clean"
         return t
 
     def _check_fee_health(self, t: Token) -> Token:
         t.fee_health = "HEALTHY"
         t.fee_health_reason = "OK"
-
-        # Cari sumber holder terbaik
         if hasattr(t, 'holder_count_helius') and t.holder_count_helius > 0:
             holder_count = t.holder_count_helius
             source = "Helius"
@@ -268,7 +281,6 @@ class FilterEngine:
         else:
             t.fee_health_reason = f"Fresh/no reliable data (age={t.age_hours:.1f}h)"
             return t
-
         reasons = []
         fh = "HEALTHY"
         if source == "Helius":
@@ -278,11 +290,10 @@ class FilterEngine:
             elif t.mc > 50_000 and holder_count < 50:
                 reasons.append(f"MC ${t.mc:,.0f} dengan {holder_count} holders")
                 fh = "LOW"
-        else:  # RugCheck
+        else:
             if t.mc > 100_000 and holder_count < 50:
                 reasons.append(f"MC ${t.mc:,.0f} dgn {holder_count} holders (RugCheck)")
                 fh = "WARNING"
-
         t.fee_health = fh
         t.fee_health_reason = " | ".join(reasons) if reasons else "OK"
         return t
@@ -304,7 +315,7 @@ class FilterEngine:
 
     def _timing_score(self, t: Token) -> Token:
         hour = datetime.utcnow().hour
-        dow  = datetime.utcnow().weekday()
+        dow = datetime.utcnow().weekday()
         wp = -15 if dow >= 5 else 0
         if   20 <= hour or hour < 2:  base, r = 90, "US prime (20-02 UTC)"
         elif 13 <= hour < 20:          base, r = 75, "EU/US overlap (13-20 UTC)"
@@ -386,7 +397,6 @@ class FilterEngine:
         if   t.risk_norm < 2: score += 10
         elif t.risk_norm < 4: score += 5
         elif t.risk_norm > 6: score -= 15
-        # holder count
         hc = t.holder_count_helius if hasattr(t, 'holder_count_helius') else t.holder_count_rc
         if hc > 0:
             if   hc > 500: score += 10
@@ -428,7 +438,6 @@ class FilterEngine:
         if t.cluster_risk == "CRITICAL":
             bad("Cluster CRITICAL", f"Score {t.cluster_score}/100 — {t.cluster_reason[:50]}", "CRITICAL ⛔")
 
-        # Fee health — hanya DANGER yang jadi flag berat (1 flag)
         if t.fee_health == "DANGER":
             bad("Fee/Holder", t.fee_health_reason[:60], "DANGER")
         elif t.fee_health == "WARNING":
@@ -442,15 +451,21 @@ class FilterEngine:
         else:
             ok("S1 Authority", f"Revoked | LP {t.lp_burn:.0f}% burned", "Aman ✓")
 
-        # S2 MC & Liq
+        # S2 MC & Liq — termasuk toleransi token mati
         if t.mc <= 0:
             bad("S2 MC", "Data tidak tersedia", "N/A")
-        elif t.mc < cfg.MIN_MC:
-            bad("S2 MC", f"${t.mc:,.0f} < min ${cfg.MIN_MC:,.0f}", f"${t.mc:,.0f}")
+        elif t.mc < cfg.MIN_MC and not t.is_bonding_curve:
+            # Kecualikan token mati (liq sangat kecil) dari flag MC
+            if t.pair_addr and t.liq < 10:
+                info("S2 MC", f"MC ${t.mc:,.0f} kecil tapi token mati (liq ${t.liq:.2f})", "Dead")
+            else:
+                bad("S2 MC", f"${t.mc:,.0f} < min ${cfg.MIN_MC:,.0f}", f"${t.mc:,.0f}")
         elif t.mc > cfg.MAX_MC:
             bad("S2 MC", f"${t.mc:,.0f} > max ${cfg.MAX_MC:,.0f}", f"${t.mc:,.0f}")
         elif t.is_bonding_curve:
             info("S2 Liq (Bonding Curve)", f"MC ${t.mc:,.0f} | Liq ~$0", "⚠ Masih di pump.fun")
+        elif t.liq < 10 and t.pair_addr:
+            info("S2 Liq (Dead)", f"Liq ${t.liq:.2f} — likely dead token", "Dead ⚰")
         elif t.liq <= 0 and t.vol1h <= 0 and t.age_hours > 1.0:
             bad("S2 Liq (Idle)", f"MC ${t.mc:,.0f} Liq $0 Vol $0 — token idle/mati", "IDLE ⚠")
         elif t.liq < cfg.MIN_LIQ:
@@ -472,14 +487,17 @@ class FilterEngine:
         else:
             ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
 
-        # S4 Risk & LP
+        # S4 Risk & LP — toleransi LP 0% untuk token fresh volume besar
         rn = t.risk_norm
         if rn > 7:
             bad("S4 Risk", f"{rn}/10 [{t.risk_label.upper()}] BAHAYA", f"{rn}/10 ⛔")
         elif rn > cfg.MAX_RISK_NORM:
             bad("S4 Risk", f"{rn}/10 > max {cfg.MAX_RISK_NORM}", f"{rn}/10")
         elif t.lp_burn == 0 and not t.is_bonding_curve:
-            bad("S4 LP Burn", "0% — dev bisa cabut liq kapanpun", "0% ⚠")
+            if t.vol1h > 10000 and t.age_hours < 0.5 and t.buys1h > 50:
+                info("S4 LP Burn", "0% (fresh, high activity — mungkin belum di-lock)", "⚡ Aktif")
+            else:
+                bad("S4 LP Burn", "0% — dev bisa cabut liq kapanpun", "0% ⚠")
         elif 0 < t.lp_burn < 80:
             bad("S4 LP Burn", f"{t.lp_burn:.0f}% < 80%", f"{t.lp_burn:.0f}%")
         else:
@@ -539,7 +557,6 @@ class FilterEngine:
             elif t.bounce_potential: info("Age",  age, f"Old + bounce")
             else:                    info("Age",  age, "Old — cek thesis")
 
-        # Holder count ditampilkan
         hc = t.holder_count_helius if hasattr(t, 'holder_count_helius') else t.holder_count_rc
         if hc > 0:
             if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")

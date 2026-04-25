@@ -93,6 +93,7 @@ class DataFetcher:
         except Exception as e:
             log.debug(f"Helius supply error: {e}")
         return None
+
     def _apply_helius_holders(self, t: Token, holders_data: dict, supply: Optional[int]) -> Token:
         """Hitung top10 & total holders dari data Helius, dengan validasi ketat."""
         if not holders_data or "value" not in holders_data:
@@ -102,16 +103,14 @@ class DataFetcher:
         t.helius_holders_available = True
         t.holder_list_helius = holder_list
 
-        # JANGAN hitung Top10 jika token masih bonding curve (liq = 0)
-        # karena supply dan desimal tidak konsisten.
+        # JANGAN hitung Top10 jika token masih bonding curve atau mati (liq <= 0 / mc <= 0)
         if t.liq <= 0 or t.mc <= 0:
-            t.top10_source = "Helius (bonding curve — skip)"
+            t.top10_source = "Helius (bonding curve/dead — skip)"
             t.holder_count_helius = len(holder_list)
             return t
 
-        # Cari desimal token dengan memanggil Helius getTokenInfo kecil
-        # Untuk sekarang, gunakan fallback 9 desimal (umum untuk Solana)
-        decimals = 9  # Mayoritas token SPL menggunakan 9 desimal
+        # Mayoritas token SPL menggunakan 9 desimal
+        decimals = 9
         if supply:
             supply_decimal = supply / (10 ** decimals)
         else:
