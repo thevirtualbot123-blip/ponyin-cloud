@@ -1,4 +1,4 @@
-"""config.py — Konfigurasi PONYIN AI AGENT v5.0 (Helius)"""
+"""config.py — Konfigurasi PONYIN AI AGENT v5.0 (Helius + Solscan fallback)"""
 import os
 from dataclasses import dataclass
 
@@ -62,7 +62,3 @@ class AgentConfig:
     @property
     def HELIUS_RPC_URL(self) -> str:
         return f"https://mainnet.helius-rpc.com/?api-key={self.HELIUS_API_KEY}" if self.HELIUS_API_KEY else ""
-
-    @property
-    def HELIUS_ENABLED(self) -> bool:
-        return bool(self.HELIUS_API_KEY)
