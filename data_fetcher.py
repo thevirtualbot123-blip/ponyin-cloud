@@ -1,5 +1,5 @@
 """
-data_fetcher.py — PONYIN AI AGENT v6.0 (with GMGN + legacy scan endpoints)
+data_fetcher.py — PONYIN AI AGENT v6.0 (GMGN + get_new_token_mints)
 """
 import asyncio, aiohttp, logging, re
 from datetime import datetime
@@ -13,7 +13,6 @@ HDR = {
     "Accept": "application/json",
 }
 CA_PATTERN = re.compile(r'[1-9A-HJ-NP-Za-km-z]{32,44}')
-
 
 class DataFetcher:
 
@@ -45,11 +44,9 @@ class DataFetcher:
 
     # ── DexScreener ─────────────────────────────────────
     async def dex_token(self, session, mint: str) -> Optional[dict]:
-        return await self._get(
-            session, f"https://api.dexscreener.com/tokens/v1/solana/{mint}"
-        )
+        return await self._get(session, f"https://api.dexscreener.com/tokens/v1/solana/{mint}")
 
-    # ── GMGN API (public demo key – free) ───────────────
+    # ── GMGN API ────────────────────────────────────────
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         url = f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}"
         headers = {
@@ -112,9 +109,7 @@ class DataFetcher:
 
     # ── RugCheck ─────────────────────────────────────────
     async def rugcheck_full(self, session, mint: str) -> Optional[dict]:
-        return await self._get(
-            session, f"https://api.rugcheck.xyz/v1/tokens/{mint}/report"
-        )
+        return await self._get(session, f"https://api.rugcheck.xyz/v1/tokens/{mint}/report")
 
     # ── Discovery (new mints) ───────────────────────────
     async def get_new_token_mints(self, session) -> List[str]:
@@ -290,7 +285,6 @@ class DataFetcher:
             if name:
                 t.rc_risks.append((level, name, desc, val))
 
-        # Top10 hanya jika sumber sebelumnya belum ada
         if t.top10_pct == 0:
             top_h = rc.get("topHolders") or []
             t.top_holders = top_h
