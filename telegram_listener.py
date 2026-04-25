@@ -1,6 +1,5 @@
 """
-telegram_listener.py — PONYIN AI AGENT v3.3
-Fix: SKIP_KEYWORDS yang salah menangkap pesan valid dari channel
+telegram_listener.py — PONYIN AI AGENT v5.0
 """
 import os, re, logging
 from typing import Callable
@@ -8,30 +7,24 @@ from config import AgentConfig
 
 log = logging.getLogger("PONYIN.Listener")
 
-# Regex CA Solana: 32-44 char base58
 CA_RE = re.compile(r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b')
 
-# FIX: Hanya skip kalau ini jelas bukan signal entry
-# "sold" dihapus — di channel signal "Dev sold" adalah POSITIF
-# Fokus pada kata yang jelas = bukan entry (exit, rug, dll)
 SKIP_KEYWORDS = [
-    "rugpull", "rugged", "rug pull",   # token sudah di-rug
-    "honeypot", "honeypot detected",    # honeypot confirmed
-    "drained", "drain",                 # wallet sudah di-drain
-    "tp hit", "take profit hit",        # signal exit, bukan entry
-    "sl hit", "stop loss hit",          # signal exit
-    "avoid this", "don't buy",          # explicit warning
-    "jangan beli", "jangan masuk",      # explicit warning bahasa indo
-    "scam confirmed", "scam alert",     # scam confirmed
-    "dev rug", "dev rugged",            # dev rug confirmed
+    "rugpull", "rugged", "rug pull",
+    "honeypot", "honeypot detected",
+    "drained", "drain",
+    "tp hit", "take profit hit",
+    "sl hit", "stop loss hit",
+    "avoid this", "don't buy",
+    "jangan beli", "jangan masuk",
+    "scam confirmed", "scam alert",
+    "dev rug", "dev rugged",
 ]
 
-# Keywords yang confirm ini adalah signal entry
-# Jika ada salah satu = lebih confident untuk process
 ENTRY_KEYWORDS = [
-    "mc:", "volume:", "liquidity:", "top 10:",  # format channel signal
-    "early holders", "sniper", "bundle",         # format channel signal
-    "pump", "pumpfun", "pump.fun",               # platform context
+    "mc:", "volume:", "liquidity:", "top 10:",
+    "early holders", "sniper", "bundle",
+    "pump", "pumpfun", "pump.fun",
     "new pair", "just launched", "fresh",
     "🚀", "🔥", "💊", "🟢", "✅",
     "buy", "entry", "masuk", "call",
@@ -65,7 +58,6 @@ class TelegramListener:
             log.error("TELEGRAM_API_ID harus angka!")
             return
 
-        # Session: StringSession lebih stabil
         session_string = os.getenv("TG_SESSION_STRING", "").strip()
         if session_string:
             session = StringSession(session_string)
@@ -90,7 +82,7 @@ class TelegramListener:
 
         log.info("Telegram connected!")
 
-        channels    = self.cfg.SIGNAL_CHANNELS
+        channels = self.cfg.SIGNAL_CHANNELS
         if not channels:
             log.warning("SIGNAL_CHANNELS kosong")
             return
@@ -130,50 +122,39 @@ class TelegramListener:
 
         text_lower = text.lower()
 
-        # Cek SKIP keywords — hanya skip jika ada kata yang jelas bukan entry
         for kw in SKIP_KEYWORDS:
             if kw in text_lower:
                 log.debug(f"Skip (keyword '{kw}'): {source}")
                 return
 
-        # Extract semua CA dari teks
         mints = self._extract_cas(text)
         if not mints:
             return
 
-        # Log untuk debug
         has_entry_kw = any(kw in text_lower for kw in ENTRY_KEYWORDS)
-        log.info(
-            f"Signal dari {source}: {len(mints)} CA "
-            f"| entry_kw: {has_entry_kw} "
-            f"| preview: {text[:60].replace(chr(10),' ')}"
-        )
+        log.info(f"Signal dari {source}: {len(mints)} CA | entry_kw: {has_entry_kw}")
 
         for mint in mints:
             await self.on_signal(f"TG:{source}", mint, text)
 
     def _extract_cas(self, text: str) -> list:
-        """Extract semua valid Solana CA dari teks."""
         candidates = CA_RE.findall(text)
 
-        # Filter: valid length, bukan kata umum
         SKIP_WORDS = {
             "https", "http", "pump", "solana", "raydium", "jupiter",
             "bonding", "curve", "search", "twitter", "telegram",
             "gmgn", "axiom", "padre", "trade", "chart", "none",
+            "address", "token", "coin", "market", "cap", "volume",
+            "liquidity", "holder", "bundle", "supply", "deploy",
+            "deployer", "creator", "mint", "burn", "pair", "block",
         }
         valid = []
         for c in candidates:
-            if len(c) < 32:
-                continue
-            if c.lower() in SKIP_WORDS:
-                continue
-            # Base58 check — tidak boleh ada 0, O, I, l
-            if any(ch in c for ch in "0OIl"):
-                continue
+            if len(c) < 32: continue
+            if c.lower() in SKIP_WORDS: continue
+            if any(ch in c for ch in "0OIl"): continue
             valid.append(c)
 
-        # Dedup, preserve order
         seen, result = set(), []
         for v in valid:
             if v not in seen:

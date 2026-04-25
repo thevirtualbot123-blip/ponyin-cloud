@@ -1,14 +1,16 @@
 """
-data_fetcher.py — Fetch data dari DexScreener + RugCheck.
-Semua free, no API key required.
+data_fetcher.py — PONYIN AI AGENT v5.0
+========================================
+- Fetch DexScreener (wajib)
+- Fetch Helius holders & supply (gratis, lebih akurat)
+- Fetch RugCheck (pelengkap)
+- Timeout ketat, graceful degradation
 """
-import re
-import asyncio
-import aiohttp
-import logging
+import asyncio, aiohttp, logging, re
+from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional, List
-from datetime import datetime
+
 from filter_engine import Token
 
 log = logging.getLogger("PONYIN.Fetcher")
@@ -18,23 +20,26 @@ HDR = {
     "Accept": "application/json",
 }
 
-# Regex untuk detect Solana CA di text
-CA_PATTERN = re.compile(r'\b[1-9A-HJ-NP-Za-km-z]{32,44}(?:pump)?\b')
+CA_PATTERN = re.compile(r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b')
+
 
 class DataFetcher:
 
+    def __init__(self, cfg=None):
+        from config import AgentConfig
+        self.cfg = cfg or AgentConfig()
+
     @asynccontextmanager
     async def session(self):
-        """Context manager untuk aiohttp session"""
         async with aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=False),
-            timeout=aiohttp.ClientTimeout(total=20)
+            timeout=aiohttp.ClientTimeout(total=15)
         ) as sess:
             yield sess
 
-    async def _get(self, session: aiohttp.ClientSession, url: str) -> Optional[dict]:
+    async def _get(self, session, url: str, headers: dict = HDR, timeout: int = 10) -> Optional[dict]:
         try:
-            async with session.get(url, headers=HDR) as r:
+            async with session.get(url, headers=headers, timeout=timeout) as r:
                 if r.status == 200:
                     return await r.json(content_type=None)
                 log.debug(f"HTTP {r.status}: {url[:60]}")
@@ -48,95 +53,106 @@ class DataFetcher:
 
     # ── DexScreener ─────────────────────────────────────
     async def dex_token(self, session, mint: str) -> Optional[dict]:
-        return await self._get(session,
-            f"https://api.dexscreener.com/tokens/v1/solana/{mint}")
+        return await self._get(session, f"https://api.dexscreener.com/tokens/v1/solana/{mint}")
 
-    async def dex_latest_profiles(self, session) -> list:
-        d = await self._get(session,
-            "https://api.dexscreener.com/token-profiles/latest/v1")
-        return [x for x in (d or []) if x.get("chainId") == "solana"]
+    # ── Helius RPC ───────────────────────────────────────
+    async def helius_get_largest_holders(self, session, mint: str, limit: int = 50) -> Optional[dict]:
+        if not self.cfg.HELIUS_API_KEY:
+            return None
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenLargestAccounts",
+            "params": [mint, {"commitment": "confirmed"}],
+        }
+        try:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=12) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    if data.get("result"):
+                        return data["result"]
+        except Exception as e:
+            log.debug(f"Helius holders error: {e}")
+        return None
 
-    async def dex_boosted(self, session) -> list:
-        d = await self._get(session,
-            "https://api.dexscreener.com/token-boosts/latest/v1")
-        return [x for x in (d or []) if x.get("chainId") == "solana"]
+    async def helius_get_token_supply(self, session, mint: str) -> Optional[int]:
+        if not self.cfg.HELIUS_API_KEY:
+            return None
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenSupply",
+            "params": [mint, {"commitment": "confirmed"}],
+        }
+        try:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=8) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    if data.get("result"):
+                        return int(data["result"]["value"]["amount"])
+        except Exception as e:
+            log.debug(f"Helius supply error: {e}")
+        return None
 
-    # ── RugCheck Full Report ─────────────────────────────
+    def _apply_helius_holders(self, t: Token, holders_data: dict, supply: Optional[int]) -> Token:
+        if not holders_data or "value" not in holders_data:
+            return t
+        holder_list = holders_data["value"]
+        t.helius_holders_available = True
+        t.holder_list_helius = holder_list
+
+        decimals = getattr(t, 'decimals', 6) or 6
+        supply_decimal = supply / (10 ** decimals) if supply else None
+
+        total_pct = 0.0
+        for h in holder_list[:10]:
+            amount = int(h.get("amount", 0))
+            pct = (amount / supply_decimal * 100) if supply_decimal and supply_decimal > 0 else 0
+            total_pct += pct
+
+        if total_pct > 0:
+            t.top10_pct = round(total_pct, 1)
+            t.top10_source = f"Helius ({len(holder_list)} holders)"
+
+        t.holder_count_helius = len(holder_list)
+        return t
+
+    # ── RugCheck ─────────────────────────────────────────
     async def rugcheck_full(self, session, mint: str) -> Optional[dict]:
-        """Full report — berisi topHolders lengkap"""
-        return await self._get(session,
-            f"https://api.rugcheck.xyz/v1/tokens/{mint}/report")
+        return await self._get(session, f"https://api.rugcheck.xyz/v1/tokens/{mint}/report")
 
-    async def rc_new_tokens(self, session) -> list:
-        d = await self._get(session,
-            "https://api.rugcheck.xyz/v1/stats/new_tokens")
-        return d if isinstance(d, list) else []
-
-    # ── Fetch + Parse Token Lengkap ──────────────────────
+    # ── Fetch utama ─────────────────────────────────────
     async def fetch_token(self, session, mint: str) -> Optional[Token]:
-        """Fetch DexScreener + RugCheck secara paralel, return Token object"""
-        dex_data, rc_data = await asyncio.gather(
-            self.dex_token(session, mint),
-            self.rugcheck_full(session, mint),
-        )
+        # 1. Dex wajib
+        dex_data = await self.dex_token(session, mint)
         token = self._parse_dex(dex_data)
         if not token:
             return None
-        token = self._apply_rugcheck(token, rc_data)
-        return token
 
-    async def get_new_token_mints(self, session) -> List[str]:
-        """Kumpulkan mint addresses dari semua sumber discovery"""
-        profiles, boosted, rc_new = await asyncio.gather(
-            self.dex_latest_profiles(session),
-            self.dex_boosted(session),
-            self.rc_new_tokens(session),
+        # 2. Paralel Helius + RugCheck
+        results = await asyncio.gather(
+            self.helius_get_largest_holders(session, mint),
+            self.helius_get_token_supply(session, mint),
+            self.rugcheck_full(session, mint),
+            return_exceptions=True
         )
-        mints = []
-        for item in profiles + boosted:
-            m = item.get("tokenAddress", "")
-            if m: mints.append(m)
-        for item in rc_new:
-            m = item.get("mint", "")
-            if m: mints.append(m)
-        return list(dict.fromkeys(mints))[:25]  # dedup, max 25
+        helius_holders = results[0] if not isinstance(results[0], Exception) else None
+        helius_supply  = results[1] if not isinstance(results[1], Exception) else None
+        rc_data        = results[2] if not isinstance(results[2], Exception) else None
 
-    # ── Extract CA dari teks Telegram ────────────────────
-    def extract_ca_from_text(self, text: str) -> Optional[str]:
-        """
-        Cari Solana CA di teks signal Telegram.
-        Prioritas: pump.fun address (ends with 'pump'), lalu address umum.
-        """
-        if not text:
-            return None
+        if helius_holders:
+            token = self._apply_helius_holders(token, helius_holders, helius_supply)
+        if rc_data:
+            token = self._apply_rugcheck(token, rc_data)
 
-        # Cari semua candidate
-        candidates = CA_PATTERN.findall(text)
-        if not candidates:
-            return None
-
-        # Filter: harus panjang 32-44 char, skip yang terlalu pendek/panjang
-        valid = [c for c in candidates if 32 <= len(c) <= 44]
-        if not valid:
-            return None
-
-        # Prioritaskan yang diawali CA: atau contract: atau setelah newline
-        for keyword in ["CA:", "ca:", "Contract:", "contract:", "Address:"]:
-            idx = text.find(keyword)
-            if idx != -1:
-                after = text[idx + len(keyword):].strip().split()[0]
-                if 32 <= len(after) <= 44:
-                    return after
-
-        # Return yang paling panjang (biasanya CA, bukan ticker)
-        return max(valid, key=len)
+        return token
 
     # ── Parse DexScreener ────────────────────────────────
     def _parse_socials(self, pair: dict):
         tw = tg = web = False
         info = pair.get("info") or {}
         for s in (info.get("socials") or []):
-            t   = (s.get("type") or "").lower()
+            t = (s.get("type") or "").lower()
             url = (s.get("url") or "").lower()
             if t in ("twitter","x") or "twitter.com" in url or "x.com" in url: tw = True
             if t == "telegram" or "t.me" in url: tg = True
@@ -169,9 +185,9 @@ class DataFetcher:
 
             cr = pair.get("pairCreatedAt") or 0
             if cr:
-                cd      = datetime.fromtimestamp(cr / 1000)
+                cd = datetime.fromtimestamp(cr / 1000)
                 created = cd.strftime("%Y-%m-%d %H:%M")
-                age_h   = (datetime.now() - cd).total_seconds() / 3600
+                age_h = (datetime.now() - cd).total_seconds() / 3600
             else:
                 created, age_h = "unknown", 0.0
 
@@ -210,12 +226,10 @@ class DataFetcher:
 
     def _apply_rugcheck(self, t: Token, rc: dict) -> Token:
         if not rc: return t
-
         t.is_rugged    = bool(rc.get("rugged"))
         t.mint_auth    = rc.get("mintAuthority")
         t.freeze_auth  = rc.get("freezeAuthority")
 
-        # Risk score normalisasi
         raw = int(rc.get("score") or 0)
         t.risk_raw = raw
         if raw < 500:
@@ -225,14 +239,12 @@ class DataFetcher:
         else:
             t.risk_norm, t.risk_label = min(10.0, round(7+(raw-2000)/3000*3, 1)), "danger"
 
-        # LP burn dari markets
         for mkt in (rc.get("markets") or []):
             lp  = mkt.get("lp") or {}
             pct = float(lp.get("lpLockedPct") or 0)
             if pct > t.lp_burn: t.lp_burn = pct
             if lp.get("lpBurned") or lp.get("burned"): t.lp_burn = 100.0
 
-        # Risks
         t.rc_risks = []
         for r in (rc.get("risks") or []):
             name  = r.get("name", "")
@@ -241,29 +253,64 @@ class DataFetcher:
             val   = str(r.get("value") or "")
             if name: t.rc_risks.append((level, name, desc, val))
 
-        # Top Holders — full report field
-        import re as _re
-        top_h = rc.get("topHolders") or []
-        t.top_holders = top_h
-        if top_h:
-            total = 0.0
-            for h in top_h[:10]:
-                pct = float(h.get("pct") or 0)
-                if 0 < pct <= 1.0: pct *= 100
-                total += pct
-            if total > 0:
-                t.top10_pct    = round(total, 1)
-                t.top10_source = f"RugCheck ({len(top_h)})"
-                t.holder_count_rc = len(top_h)
-
-        # Fallback dari risks description
-        if t.top10_pct == 0:
-            for (lvl, name, desc, val) in t.rc_risks:
-                if "top 10" in name.lower() or "high ownership" in name.lower():
-                    nums = _re.findall(r"(\d+(?:\.\d+)?)\s*%", val + " " + desc)
-                    if nums:
-                        t.top10_pct    = float(nums[0])
-                        t.top10_source = "RugCheck (risks)"
-                        break
+        # Top holders hanya jika belum dari Helius
+        if not (hasattr(t, 'helius_holders_available') and t.helius_holders_available):
+            top_h = rc.get("topHolders") or []
+            t.top_holders = top_h
+            if top_h:
+                total = 0.0
+                for h in top_h[:10]:
+                    pct = float(h.get("pct") or 0)
+                    if 0 < pct <= 1.0: pct *= 100
+                    total += pct
+                if total > 0:
+                    t.top10_pct    = round(total, 1)
+                    t.top10_source = f"RugCheck ({len(top_h)})"
+                    t.holder_count_rc = len(top_h)
+        else:
+            t.top_holders = rc.get("topHolders") or []
+            if not t.holder_count_rc:
+                t.holder_count_rc = len(t.top_holders)
 
         return t
+
+    # ── Discovery ────────────────────────────────────────
+    async def get_new_token_mints(self, session) -> List[str]:
+        profiles, boosted, rc_new = await asyncio.gather(
+            self.dex_latest_profiles(session),
+            self.dex_boosted(session),
+            self.rc_new_tokens(session),
+        )
+        mints = []
+        for item in profiles + boosted:
+            m = item.get("tokenAddress", "")
+            if m: mints.append(m)
+        for item in rc_new:
+            m = item.get("mint", "")
+            if m: mints.append(m)
+        return list(dict.fromkeys(mints))[:25]
+
+    async def dex_latest_profiles(self, session) -> list:
+        d = await self._get(session, "https://api.dexscreener.com/token-profiles/latest/v1")
+        return [x for x in (d or []) if x.get("chainId") == "solana"]
+
+    async def dex_boosted(self, session) -> list:
+        d = await self._get(session, "https://api.dexscreener.com/token-boosts/latest/v1")
+        return [x for x in (d or []) if x.get("chainId") == "solana"]
+
+    async def rc_new_tokens(self, session) -> list:
+        d = await self._get(session, "https://api.rugcheck.xyz/v1/stats/new_tokens")
+        return d if isinstance(d, list) else []
+
+    def extract_ca_from_text(self, text: str) -> Optional[str]:
+        if not text: return None
+        candidates = CA_PATTERN.findall(text)
+        valid = [c for c in candidates if 32 <= len(c) <= 44]
+        if not valid: return None
+        for keyword in ["CA:", "ca:", "Contract:", "contract:", "Address:"]:
+            idx = text.find(keyword)
+            if idx != -1:
+                after = text[idx + len(keyword):].strip().split()[0]
+                if 32 <= len(after) <= 44:
+                    return after
+        return max(valid, key=len)

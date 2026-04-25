@@ -1,4 +1,4 @@
-"""config.py — Konfigurasi PONYIN AI AGENT v3"""
+"""config.py — Konfigurasi PONYIN AI AGENT v5.0 (Helius)"""
 import os
 from dataclasses import dataclass
 
@@ -19,9 +19,7 @@ class AgentConfig:
         return [c.strip() for c in raw.split(",") if c.strip()] if raw else []
 
     # ── TELEGRAM BOT (notif & command ke kamu) ─────────────
-    # Dapatkan dari @BotFather → /newbot
     BOT_TOKEN:   str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    # Dapatkan chat_id kamu: chat ke @userinfobot
     BOT_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID",  "")
 
     # ── ANTHROPIC AI (opsional) ────────────────────────────
@@ -57,3 +55,14 @@ class AgentConfig:
     SCAN_INTERVAL:     int  = int(os.getenv("SCAN_INTERVAL",    "120"))
     MONITOR_INTERVAL:  int  = int(os.getenv("MONITOR_INTERVAL", "60"))
     AUTO_SCAN_ENABLED: bool = os.getenv("AUTO_SCAN", "false").lower() == "true"
+
+    # ── HELIUS RPC (free tier: https://dev.helius.xyz/) ──
+    HELIUS_API_KEY: str = os.getenv("HELIUS_API_KEY", "")
+
+    @property
+    def HELIUS_RPC_URL(self) -> str:
+        return f"https://mainnet.helius-rpc.com/?api-key={self.HELIUS_API_KEY}" if self.HELIUS_API_KEY else ""
+
+    @property
+    def HELIUS_ENABLED(self) -> bool:
+        return bool(self.HELIUS_API_KEY)
