@@ -224,8 +224,11 @@ class FilterEngine:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
+        # FIX: synced with data_fetcher._apply_gmgn_data — added
+        # "topHolderRate" and "top_10_holder_percent" which were missing.
         for key in ("top_10_holder_pct", "top_10_holder_rate",
-                    "top10HolderPercent", "top10_holder_rate"):
+                    "top10HolderPercent", "top10_holder_rate",
+                    "topHolderRate", "top_10_holder_percent"):
             raw = td.get(key)
             if raw is not None:
                 try:
@@ -239,11 +242,16 @@ class FilterEngine:
                 break
 
         if not t.holder_count_gmgn:
-            for key in ("holder_count", "holder", "holderCount"):
+            # FIX: synced with data_fetcher — added "holders" and "holder_num"
+            for key in ("holder_count", "holder", "holderCount",
+                        "holders", "holder_num"):
                 hc = td.get(key)
                 if hc:
-                    t.holder_count_gmgn = int(hc)
-                    break
+                    try:
+                        t.holder_count_gmgn = int(hc)
+                        break
+                    except (ValueError, TypeError):
+                        pass
 
         return t
 

@@ -1,5 +1,17 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.0 + Helius fallback
+data_fetcher.py — PONYIN AI AGENT v7.1
+Fixes:
+  - GMGN API: better auth (x-api-key header + query param fallback),
+    browser-like headers to bypass bot detection, retry per URL
+  - Helius "20 sampel" bug: getTokenLargestAccounts returns max 20 by
+    Solana RPC design. New helius_get_token_holder_count() uses DAS
+    getTokenAccounts which returns the real `total` holder count.
+  - _apply_helius_holders: removed misleading holder_count assignment
+    (was always ≤ 20, not real count)
+  - get_new_token_mints: added gmgn_new_tokens() as discovery source,
+    increased cap from 40 → 100
+  - fetch_token: calls helius_get_token_holder_count as last fallback
+    so holder_count_gmgn is always populated if Helius key is set
 """
 import asyncio, aiohttp, logging, re
 from datetime import datetime
@@ -31,7 +43,7 @@ class DataFetcher:
 
     async def _get(self, session, url, headers=HDR, timeout=12):
         try:
-            async with session.get(url, headers=headers, timeout=timeout) as r:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as r:
                 if r.status == 200:
                     return await r.json(content_type=None)
                 log.debug(f"HTTP {r.status}: {url[:70]}")
@@ -57,27 +69,76 @@ class DataFetcher:
             return []
         return data if isinstance(data, list) else (data.get("pairs") or [])
 
-    # ── GMGN API ────────────────────────────────────────
+    # ── GMGN API ─────────────────────────────────────────
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
-        url = f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}"
-        api_key = self.cfg.GMGN_API_KEY if getattr(self.cfg, 'GMGN_API_KEY', '') else "gmgn_solbscbaseethmonadtron"
+        """
+        Fetch token info from GMGN.
+        FIX: browser-like headers (bot detection bypass), try URL with
+        api_key query param first (most reliable for private keys), then
+        header-only as fallback. Better error logging.
+        """
+        api_key = getattr(self.cfg, 'GMGN_API_KEY', '') or ''
+
+        # Browser-like headers — required to pass Cloudflare/bot checks
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "application/json",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Referer": "https://gmgn.ai/",
-            "x-api-key": api_key,
+            "Origin": "https://gmgn.ai",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         }
-        try:
-            async with session.get(url, headers=headers, timeout=15) as r:
-                if r.status == 200:
-                    data = await r.json(content_type=None)
-                    if data.get("code") == 0 and data.get("data"):
-                        return data["data"]
-                    log.debug(f"GMGN API code={data.get('code')} msg={data.get('msg')}")
-                else:
-                    log.debug(f"GMGN HTTP {r.status} for {mint[:12]}")
-        except Exception as e:
-            log.debug(f"GMGN token info error: {e}")
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        base_url = f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}"
+
+        # Build URL list: with query-param key first (often more reliable),
+        # then plain URL (works for public quota)
+        urls_to_try: List[str] = []
+        if api_key:
+            urls_to_try.append(f"{base_url}?api_key={api_key}")
+        urls_to_try.append(base_url)
+
+        for url in urls_to_try:
+            try:
+                async with session.get(
+                    url, headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as r:
+                    if r.status == 200:
+                        data = await r.json(content_type=None)
+                        code = data.get("code", -1)
+                        if code == 0 and data.get("data"):
+                            log.debug(f"GMGN OK: {mint[:12]}")
+                            return data["data"]
+                        log.debug(
+                            f"GMGN non-zero code={code} "
+                            f"msg={data.get('msg','?')} for {mint[:12]}"
+                        )
+                        # code != 0 on this URL — try next
+                        continue
+                    elif r.status == 429:
+                        log.warning(f"GMGN rate-limited (429) for {mint[:12]}")
+                        await asyncio.sleep(2)
+                    elif r.status == 403:
+                        log.warning(
+                            f"GMGN 403 Forbidden for {mint[:12]} "
+                            f"— IP may be blocked or API key invalid"
+                        )
+                    else:
+                        log.debug(f"GMGN HTTP {r.status} for {mint[:12]}")
+            except asyncio.TimeoutError:
+                log.debug(f"GMGN timeout: {mint[:12]}")
+            except Exception as e:
+                log.debug(f"GMGN error {mint[:12]}: {e}")
+
         return None
 
     @staticmethod
@@ -147,8 +208,8 @@ class DataFetcher:
 
         # ── LP Burn ───────────────────────────────────────
         burn_status = str(td.get("burn_status") or "").lower()
-        burn_ratio_raw = td.get("burn_ratio") or td.get("lp_burn_ratio") or \
-                         td.get("lpBurnRatio") or "0"
+        burn_ratio_raw = (td.get("burn_ratio") or td.get("lp_burn_ratio") or
+                          td.get("lpBurnRatio") or "0")
         try:
             br = float(burn_ratio_raw)
             if br >= 0.95:
@@ -203,8 +264,12 @@ class DataFetcher:
 
         return t
 
-    # ── Helius Fallback ──────────────────────────────────
+    # ── Helius: largest accounts (top-10% calc) ──────────
     async def helius_get_largest_holders(self, session, mint: str) -> Optional[dict]:
+        """
+        Solana RPC getTokenLargestAccounts — returns max 20 largest accounts.
+        Used ONLY for top-10 holder % calculation, NOT for holder count.
+        """
         if not self.cfg.HELIUS_API_KEY:
             return None
         payload = {
@@ -214,12 +279,15 @@ class DataFetcher:
             "params": [mint, {"commitment": "confirmed"}],
         }
         try:
-            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=12) as r:
+            async with session.post(
+                self.cfg.HELIUS_RPC_URL, json=payload,
+                timeout=aiohttp.ClientTimeout(total=12)
+            ) as r:
                 if r.status == 200:
                     data = await r.json()
                     return data.get("result")
         except Exception as e:
-            log.debug(f"Helius holders error: {e}")
+            log.debug(f"Helius largest holders error: {e}")
         return None
 
     async def helius_get_token_supply(self, session, mint: str) -> Optional[dict]:
@@ -232,7 +300,10 @@ class DataFetcher:
             "params": [mint, {"commitment": "confirmed"}],
         }
         try:
-            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=8) as r:
+            async with session.post(
+                self.cfg.HELIUS_RPC_URL, json=payload,
+                timeout=aiohttp.ClientTimeout(total=8)
+            ) as r:
                 if r.status == 200:
                     data = await r.json()
                     return data.get("result")
@@ -240,7 +311,56 @@ class DataFetcher:
             log.debug(f"Helius supply error: {e}")
         return None
 
+    async def helius_get_token_holder_count(self, session, mint: str) -> int:
+        """
+        FIX for '20 sampel' bug:
+        getTokenLargestAccounts returns max 20 accounts by Solana RPC spec.
+        This method uses Helius DAS getTokenAccounts which returns `total`
+        — the real holder count across all accounts.
+        """
+        if not self.cfg.HELIUS_API_KEY:
+            return 0
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenAccounts",
+            "params": {
+                "mint": mint,
+                "limit": 1,          # fetch minimal data; only need `total`
+                "displayOptions": {},
+            },
+        }
+        try:
+            async with session.post(
+                self.cfg.HELIUS_RPC_URL, json=payload,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    result = data.get("result")
+                    if isinstance(result, dict):
+                        total = result.get("total", 0)
+                        if total:
+                            log.debug(
+                                f"Helius DAS holder count {mint[:12]}: {total}"
+                            )
+                            return int(total)
+                else:
+                    log.debug(
+                        f"Helius getTokenAccounts HTTP {r.status} "
+                        f"for {mint[:12]}"
+                    )
+        except Exception as e:
+            log.debug(f"Helius holder count error {mint[:12]}: {e}")
+        return 0
+
     def _apply_helius_holders(self, t: Token, holders_data: dict, supply_data: dict) -> Token:
+        """
+        Compute top-10 holder % from getTokenLargestAccounts data.
+        FIX: Do NOT set holder_count here. getTokenLargestAccounts returns
+        max 20 accounts by Solana RPC design — it's NOT the total holder count.
+        Actual holder count is fetched via helius_get_token_holder_count().
+        """
         if not holders_data or "value" not in holders_data:
             return t
 
@@ -249,18 +369,16 @@ class DataFetcher:
         ui_supply = float(supply_info.get("uiAmount", 0))
 
         if ui_supply <= 0:
-            log.debug("Helius fallback: supply is 0, cannot compute Top10")
+            log.debug("Helius: supply is 0, cannot compute Top10")
             return t
 
-        total_ui = 0.0
-        for h in holder_list[:10]:
-            total_ui += float(h.get("uiAmount", 0))
+        total_ui = sum(float(h.get("uiAmount", 0)) for h in holder_list[:10])
 
         if total_ui > 0:
             top10 = (total_ui / ui_supply) * 100
             t.top10_pct = round(top10, 1)
-            t.top10_source = f"Helius ({len(holder_list)} holders)"
-            t.holder_count_helius = len(holder_list)
+            t.top10_source = "Helius"
+            # ← No holder_count assignment here (was always wrong: max 20)
 
         return t
 
@@ -270,10 +388,15 @@ class DataFetcher:
 
     # ── Discovery: new mints ─────────────────────────────
     async def get_new_token_mints(self, session) -> List[str]:
-        profiles, boosted, rc_new = await asyncio.gather(
+        """
+        FIX: added gmgn_new_tokens() as discovery source,
+        increased cap from 40 → 100.
+        """
+        profiles, boosted, rc_new, gmgn_new = await asyncio.gather(
             self.dex_latest_profiles(session),
             self.dex_boosted(session),
             self.rc_new_tokens(session),
+            self.gmgn_new_tokens(session),
             return_exceptions=True,
         )
         mints = []
@@ -283,7 +406,12 @@ class DataFetcher:
                     m = item.get("tokenAddress") or item.get("mint") or ""
                     if m:
                         mints.append(m)
-        return list(dict.fromkeys(mints))[:40]
+        # gmgn_new_tokens returns plain mint strings
+        if isinstance(gmgn_new, list):
+            for m in gmgn_new:
+                if isinstance(m, str) and m:
+                    mints.append(m)
+        return list(dict.fromkeys(mints))[:100]   # was 40
 
     async def dex_latest_profiles(self, session) -> list:
         d = await self._get(session, "https://api.dexscreener.com/token-profiles/latest/v1")
@@ -296,6 +424,62 @@ class DataFetcher:
     async def rc_new_tokens(self, session) -> list:
         d = await self._get(session, "https://api.rugcheck.xyz/v1/stats/new_tokens")
         return d if isinstance(d, list) else []
+
+    async def gmgn_new_tokens(self, session) -> List[str]:
+        """
+        Fetch trending/new tokens from GMGN as additional scan source.
+        Tries both new-creation and pump-rank endpoints.
+        """
+        api_key = getattr(self.cfg, 'GMGN_API_KEY', '') or ''
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://gmgn.ai/",
+            "Origin": "https://gmgn.ai",
+        }
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        endpoints = [
+            "https://gmgn.ai/defi/quotation/v1/rank/sol/new_creation/1h"
+            "?limit=50&orderby=created_timestamp&direction=desc",
+            "https://gmgn.ai/defi/quotation/v1/rank/sol/pump_rank/1h"
+            "?limit=50&orderby=volume&direction=desc&filters[]=not_wash_trading",
+        ]
+
+        mints: List[str] = []
+        for base_url in endpoints:
+            url = f"{base_url}&api_key={api_key}" if api_key else base_url
+            try:
+                data = await self._get(session, url, headers=headers, timeout=10)
+                if not data:
+                    continue
+                # Try common response shapes
+                items = None
+                if isinstance(data.get("data"), list):
+                    items = data["data"]
+                else:
+                    for key in ("rank", "tokens", "items", "list"):
+                        if isinstance(data.get(key), list):
+                            items = data[key]
+                            break
+                if items:
+                    for item in items:
+                        addr = (item.get("address") or item.get("token_address")
+                                or item.get("mint") or "")
+                        if addr and len(addr) >= 32:
+                            mints.append(addr)
+            except Exception as e:
+                log.debug(f"gmgn_new_tokens error: {e}")
+
+        unique = list(dict.fromkeys(mints))
+        if unique:
+            log.info(f"GMGN discovery: {len(unique)} tokens")
+        return unique[:60]
 
     # ── FILTERED SCAN ────────────────────────────────────
     async def get_filtered_scan_mints(
@@ -378,6 +562,10 @@ class DataFetcher:
 
     # ── Fetch utama (GMGN → Helius fallback) ────────────
     async def fetch_token(self, session, mint: str) -> Optional[Token]:
+        """
+        FIX: after top-10 Helius fallback, also call helius_get_token_holder_count()
+        to populate holder_count_gmgn with the real total (not the misleading ≤20).
+        """
         dex_raw, gmgn_raw, rc_raw = await asyncio.gather(
             self.dex_token(session, mint),
             self.gmgn_token_info(session, mint),
@@ -401,8 +589,9 @@ class DataFetcher:
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
 
+        # ── Helius fallback: top-10 % ──────────────────
         if token.top10_pct == 0 and self.cfg.HELIUS_API_KEY:
-            log.info(f"GMGN Top10 empty, falling back to Helius for {mint[:12]}...")
+            log.info(f"GMGN Top10 missing, Helius fallback for {mint[:12]}...")
             helius_holders, helius_supply = await asyncio.gather(
                 self.helius_get_largest_holders(session, mint),
                 self.helius_get_token_supply(session, mint),
@@ -412,9 +601,18 @@ class DataFetcher:
                 if not isinstance(helius_supply, Exception) and helius_supply:
                     token = self._apply_helius_holders(token, helius_holders, helius_supply)
                 else:
-                    log.warning("Helius supply fetch failed, cannot compute Top10")
+                    log.warning("Helius supply fetch failed, Top10 stays N/A")
             else:
                 log.warning("Helius holders fetch failed, Top10 stays N/A")
+
+        # ── Helius DAS fallback: real holder count ──────
+        # FIX: if GMGN didn't provide holder_count, use DAS getTokenAccounts
+        # which returns the actual total — not the misleading ≤20 from
+        # getTokenLargestAccounts.
+        if token.holder_count_gmgn == 0 and self.cfg.HELIUS_API_KEY:
+            hc = await self.helius_get_token_holder_count(session, mint)
+            if hc > 0:
+                token.holder_count_gmgn = hc
 
         return token
 
