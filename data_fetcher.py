@@ -1,8 +1,7 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.3
-- GMGN dual endpoint (plural/singular) + response debug log
-- Helius DAS holder count with success/error log
-- Solscan holder count (public, accurate) as last resort
+data_fetcher.py — PONYIN AI AGENT v7.3 FINAL
+Root cause fix: random_tls_extension_order=True (bypass Cloudflare TLS fingerprint)
+                 new session every request, priority header, dual endpoint
 """
 import asyncio, aiohttp, logging, re, random
 from datetime import datetime
@@ -60,45 +59,61 @@ class DataFetcher:
             return []
         return data if isinstance(data, list) else (data.get("pairs") or [])
 
-    # ── GMGN API (tls_client) ───────────────────────────
-    async def _gmgn_fetch(self, url: str, mint: str) -> Optional[dict]:
-        """Low-level fetch to GMGN via tls_client, with detailed logging."""
+    # ── GMGN API (FIX: random_tls_extension_order + new session per request) ─
+    async def _gmgn_fetch(self, url: str, mint: str, method: str = "GET",
+                          payload: dict = None) -> Optional[dict]:
+        """
+        Low-level fetch to GMGN via tls_client.
+        CRITICAL FIX: random_tls_extension_order=True (bypasses Cloudflare TLS
+        fingerprint) + new session for EVERY request.
+        """
         import tls_client
         from fake_useragent import UserAgent
 
         ua = UserAgent()
+        identifier = random.choice(["chrome_120", "chrome_122", "firefox_120"])
+
+        # KEY FIX: random_tls_extension_order=True — this is what the working
+        # gmgnai-wrapper uses and what makes Cloudflare accept the request
+        client = tls_client.Session(
+            client_identifier=identifier,
+            random_tls_extension_order=True,
+        )
+        client.timeout_seconds = 60
+
         headers = {
-            "Host": "gmgn.ai",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Referer": "https://gmgn.ai/?chain=sol",
-            "DNT": "1",
-            "User-Agent": ua.random,
+            'Host': 'gmgn.ai',
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+            'dnt': '1',
+            'priority': 'u=1, i',
+            'referer': 'https://gmgn.ai/?chain=sol',
+            'content-type': 'application/json',
+            'user-agent': ua.random,
         }
 
         try:
-            client = tls_client.Session(
-                client_identifier=random.choice(["chrome_120", "chrome_122", "firefox_120"])
-            )
-            response = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: client.get(url, headers=headers, timeout=15)
-            )
+            if method == "POST":
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: client.post(url, json=payload, headers=headers)
+                )
+            else:
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: client.get(url, headers=headers)
+                )
+
             status = response.status_code
             if status == 200:
                 data = response.json()
-                # Debug: log raw response snippet if not successful
                 code = data.get("code", -1)
                 if code == 0 and data.get("data"):
-                    log.info(f"GMGN OK ({mint[:12]}): {url.split('/')[-1][:30]}")
+                    log.info(f"GMGN OK ({mint[:12]}): holder_count={data['data'].get('holder_count','?')}")
                     return data["data"]
                 else:
-                    # Log response structure to debug
-                    sample = str(data)[:300]
+                    sample = str(data)[:200]
                     log.info(
                         f"GMGN no data for {mint[:12]}: code={code} "
-                        f"msg={data.get('msg','?')} | keys={list(data.keys())[:5]} "
-                        f"| sample={sample}"
+                        f"msg={data.get('msg','?')} | sample={sample}"
                     )
             else:
                 log.info(f"GMGN HTTP {status} for {mint[:12]}")
@@ -109,10 +124,24 @@ class DataFetcher:
 
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         """
-        Try both plural and singular endpoints.
-        Most wrappers use plural, but some tokens only respond on singular.
+        Try the POST endpoint first (used by gmgnai-wrapper's getTokenInfo),
+        then fallback to GET endpoints.
         """
-        # Plural first (used by gmgnai-wrapper)
+        # 1) POST /api/v1/mutil_window_token_info (used by gmgnai-wrapper — most reliable)
+        data = await self._gmgn_fetch(
+            "https://gmgn.ai/api/v1/mutil_window_token_info",
+            mint,
+            method="POST",
+            payload={"chain": "sol", "addresses": [mint]}
+        )
+        if data:
+            # Response structure: {"data": {"tokens": [token_data]}}
+            result = data.get("tokens")
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return data  # mungkin sudah flat
+
+        # 2) GET /defi/quotation/v1/tokens/sol/{mint} (plural)
         data = await self._gmgn_fetch(
             f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
             mint
@@ -120,7 +149,7 @@ class DataFetcher:
         if data:
             return data
 
-        # Fallback: singular endpoint (some private APIs use this)
+        # 3) GET /defi/quotation/v1/token/sol/{mint} (singular)
         data = await self._gmgn_fetch(
             f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
             mint
@@ -133,13 +162,18 @@ class DataFetcher:
         from fake_useragent import UserAgent
 
         ua = UserAgent()
+        client = tls_client.Session(
+            client_identifier=random.choice(["chrome_120", "chrome_122"]),
+            random_tls_extension_order=True,
+        )
         headers = {
-            "Host": "gmgn.ai",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://gmgn.ai/?chain=sol",
-            "DNT": "1",
-            "User-Agent": ua.random,
+            'Host': 'gmgn.ai',
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+            'dnt': '1',
+            'priority': 'u=1, i',
+            'referer': 'https://gmgn.ai/?chain=sol',
+            'user-agent': ua.random,
         }
 
         endpoints = [
@@ -150,13 +184,10 @@ class DataFetcher:
         ]
 
         mints: List[str] = []
-        client = tls_client.Session(
-            client_identifier=random.choice(["chrome_120", "chrome_122"])
-        )
         for url in endpoints:
             try:
                 response = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: client.get(url, headers=headers, timeout=10)
+                    None, lambda: client.get(url, headers=headers)
                 )
                 if response.status_code == 200:
                     data = response.json()
@@ -310,16 +341,13 @@ class DataFetcher:
         if not self.cfg.HELIUS_API_KEY:
             return None
         payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
+            "jsonrpc": "2.0", "id": 1,
             "method": "getTokenLargestAccounts",
             "params": [mint, {"commitment": "confirmed"}],
         }
         try:
-            async with session.post(
-                self.cfg.HELIUS_RPC_URL, json=payload,
-                timeout=aiohttp.ClientTimeout(total=12)
-            ) as r:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
+                                    timeout=aiohttp.ClientTimeout(total=12)) as r:
                 if r.status == 200:
                     data = await r.json()
                     return data.get("result")
@@ -331,16 +359,13 @@ class DataFetcher:
         if not self.cfg.HELIUS_API_KEY:
             return None
         payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
+            "jsonrpc": "2.0", "id": 1,
             "method": "getTokenSupply",
             "params": [mint, {"commitment": "confirmed"}],
         }
         try:
-            async with session.post(
-                self.cfg.HELIUS_RPC_URL, json=payload,
-                timeout=aiohttp.ClientTimeout(total=8)
-            ) as r:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
+                                    timeout=aiohttp.ClientTimeout(total=8)) as r:
                 if r.status == 200:
                     data = await r.json()
                     return data.get("result")
@@ -349,24 +374,16 @@ class DataFetcher:
         return None
 
     async def helius_get_token_holder_count(self, session, mint: str) -> int:
-        """Returns real holder count from Helius DAS. Logs result."""
         if not self.cfg.HELIUS_API_KEY:
             return 0
         payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
+            "jsonrpc": "2.0", "id": 1,
             "method": "getTokenAccounts",
-            "params": {
-                "mint": mint,
-                "limit": 1,
-                "displayOptions": {},
-            },
+            "params": {"mint": mint, "limit": 1, "displayOptions": {}},
         }
         try:
-            async with session.post(
-                self.cfg.HELIUS_RPC_URL, json=payload,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as r:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
+                                    timeout=aiohttp.ClientTimeout(total=10)) as r:
                 if r.status == 200:
                     data = await r.json()
                     result = data.get("result")
@@ -374,8 +391,6 @@ class DataFetcher:
                         total = result.get("total", 0)
                         log.info(f"Helius DAS holder count for {mint[:12]}: {total}")
                         return int(total)
-                else:
-                    log.info(f"Helius DAS HTTP {r.status} for {mint[:12]}")
         except Exception as e:
             log.info(f"Helius DAS exception {mint[:12]}: {e}")
         return 0
@@ -394,27 +409,11 @@ class DataFetcher:
             t.top10_source = "Helius"
         return t
 
-    # ── Solscan holder count (accurate, public) ──────────
-    async def solscan_token_meta(self, session, mint: str) -> Optional[int]:
-        """Fallback holder count from Solscan public API."""
-        url = f"https://public-api.solscan.io/token/meta?tokenAddress={mint}"
-        try:
-            async with session.get(url, timeout=10) as r:
-                if r.status == 200:
-                    data = await r.json(content_type=None)
-                    if isinstance(data, dict) and "holder" in data:
-                        hc = int(data["holder"])
-                        log.info(f"Solscan holder count for {mint[:12]}: {hc}")
-                        return hc
-        except Exception as e:
-            log.debug(f"Solscan meta error {mint[:12]}: {e}")
-        return None
-
     # ── RugCheck ─────────────────────────────────────────
     async def rugcheck_full(self, session, mint: str) -> Optional[dict]:
         return await self._get(session, f"https://api.rugcheck.xyz/v1/tokens/{mint}/report")
 
-    # ── Discovery: new mints ─────────────────────────────
+    # ── Discovery ────────────────────────────────────────
     async def get_new_token_mints(self, session) -> List[str]:
         profiles, boosted, rc_new, gmgn_new = await asyncio.gather(
             self.dex_latest_profiles(session),
@@ -450,67 +449,40 @@ class DataFetcher:
 
     # ── FILTERED SCAN ────────────────────────────────────
     async def get_filtered_scan_mints(
-        self, session,
-        min_mc: float = 5_000,
-        max_mc: float = 50_000,
-        min_liq: float = 1_000,
-        min_vol1h: float = 3_000,
-        allowed_dex: set = None,
-        max_results: int = 20,
+        self, session, min_mc=5_000, max_mc=50_000,
+        min_liq=1_000, min_vol1h=3_000, allowed_dex=None, max_results=20
     ) -> List[Tuple[float, str]]:
         if allowed_dex is None:
-            allowed_dex = {
-                "pump_fun", "pumpfun", "pump.fun",
-                "raydium",
-                "meteora",
-                "orca",
-            }
-
+            allowed_dex = {"pump_fun", "pumpfun", "pump.fun", "raydium", "meteora", "orca"}
         raw_mints = await self.get_new_token_mints(session)
         if not raw_mints:
             return []
-
         all_pairs = []
-        batch_size = 30
-        batches = [raw_mints[i:i+batch_size]
-                   for i in range(0, min(len(raw_mints), 90), batch_size)]
-        fetch_tasks = [self.dex_tokens_batch(session, b) for b in batches]
-        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
-        for batch_pairs in results:
-            if isinstance(batch_pairs, list):
-                all_pairs.extend(batch_pairs)
-
-        candidates: List[Tuple[float, str]] = []
-        seen_mints: set = set()
-
+        for i in range(0, min(len(raw_mints), 90), 30):
+            batch = raw_mints[i:i+30]
+            pairs = await self.dex_tokens_batch(session, batch)
+            if pairs:
+                all_pairs.extend(pairs)
+        candidates = []
+        seen = set()
         for pair in all_pairs:
-            if not isinstance(pair, dict):
-                continue
-            if pair.get("chainId") != "solana":
+            if not isinstance(pair, dict) or pair.get("chainId") != "solana":
                 continue
             base = pair.get("baseToken") or {}
             mint = base.get("address", "")
-            if not mint or len(mint) < 30 or mint in seen_mints:
+            if not mint or len(mint) < 30 or mint in seen:
                 continue
-
-            mc     = float(pair.get("marketCap") or pair.get("fdv") or 0)
-            liq    = float((pair.get("liquidity") or {}).get("usd") or 0)
-            vol1h  = float((pair.get("volume") or {}).get("h1") or 0)
-            chg5m  = float((pair.get("priceChange") or {}).get("m5") or 0)
+            mc = float(pair.get("marketCap") or pair.get("fdv") or 0)
+            liq = float((pair.get("liquidity") or {}).get("usd") or 0)
+            vol1h = float((pair.get("volume") or {}).get("h1") or 0)
+            chg5m = float((pair.get("priceChange") or {}).get("m5") or 0)
             dex_id = (pair.get("dexId") or "").lower().replace(".", "_").replace("-", "_")
-
-            if not (min_mc <= mc <= max_mc):
-                continue
-            if liq < min_liq:
-                continue
-            if vol1h < min_vol1h:
-                continue
-            if not any(allowed in dex_id or dex_id in allowed for allowed in allowed_dex):
-                continue
-
-            seen_mints.add(mint)
+            if not (min_mc <= mc <= max_mc): continue
+            if liq < min_liq: continue
+            if vol1h < min_vol1h: continue
+            if not any(a in dex_id or dex_id in a for a in allowed_dex): continue
+            seen.add(mint)
             candidates.append((chg5m, mint))
-
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[:max_results]
 
@@ -522,24 +494,19 @@ class DataFetcher:
             self.rugcheck_full(session, mint),
             return_exceptions=True,
         )
-        if isinstance(dex_raw, Exception):
-            dex_raw = None
-        if isinstance(gmgn_raw, Exception):
-            gmgn_raw = None
-        if isinstance(rc_raw, Exception):
-            rc_raw = None
+        dex_raw = None if isinstance(dex_raw, Exception) else dex_raw
+        gmgn_raw = None if isinstance(gmgn_raw, Exception) else gmgn_raw
+        rc_raw = None if isinstance(rc_raw, Exception) else rc_raw
 
         token = self._parse_dex(dex_raw)
         if not token:
             return None
-
         if rc_raw:
             token = self._apply_rugcheck(token, rc_raw)
-
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
 
-        # Helius fallback for top-10% (only if GMGN didn't provide)
+        # Helius fallback hanya jika GMGN benar-benar kosong
         if token.top10_pct == 0 and self.cfg.HELIUS_API_KEY:
             helius_holders, helius_supply = await asyncio.gather(
                 self.helius_get_largest_holders(session, mint),
@@ -550,16 +517,10 @@ class DataFetcher:
                 if not isinstance(helius_supply, Exception) and helius_supply:
                     token = self._apply_helius_holders(token, helius_holders, helius_supply)
 
-        # Holder count: GMGN → Helius DAS → Solscan
-        if token.holder_count_gmgn == 0:
-            if self.cfg.HELIUS_API_KEY:
-                hc = await self.helius_get_token_holder_count(session, mint)
-                if hc > 0:
-                    token.holder_count_gmgn = hc
-            if token.holder_count_gmgn == 0:
-                hc = await self.solscan_token_meta(session, mint)
-                if hc and hc > 0:
-                    token.holder_count_gmgn = hc
+        if token.holder_count_gmgn == 0 and self.cfg.HELIUS_API_KEY:
+            hc = await self.helius_get_token_holder_count(session, mint)
+            if hc > 0:
+                token.holder_count_gmgn = hc
 
         return token
 
@@ -569,19 +530,14 @@ class DataFetcher:
         info = pair.get("info") or {}
         for s in info.get("socials") or []:
             t_url = (s.get("type") or "").lower()
-            url   = (s.get("url") or "").lower()
-            if t_url in ("twitter", "x") or "twitter.com" in url or "x.com" in url:
-                tw = True
-            if t_url == "telegram" or "t.me" in url:
-                tg = True
+            url = (s.get("url") or "").lower()
+            if t_url in ("twitter", "x") or "twitter.com" in url or "x.com" in url: tw = True
+            if t_url == "telegram" or "t.me" in url: tg = True
         for w in info.get("websites") or []:
             url = (w.get("url") or "").lower()
-            if url:
-                web = True
-            if "twitter.com" in url or "x.com" in url:
-                tw = True
-            if "t.me" in url:
-                tg = True
+            if url: web = True
+            if "twitter.com" in url or "x.com" in url: tw = True
+            if "t.me" in url: tg = True
         for k in ("twitter", "twitterUrl"):
             if pair.get(k): tw = True
         for k in ("telegram", "telegramUrl"):
@@ -596,101 +552,67 @@ class DataFetcher:
             mint = base.get("address", "")
             if not mint or len(mint) < 30:
                 return None
-
             price = float(pair.get("priceUsd") or 0)
-            mc    = float(pair.get("marketCap") or pair.get("fdv") or 0)
-            liq   = float((pair.get("liquidity") or {}).get("usd") or 0)
-            vol   = pair.get("volume") or {}
-            pc    = pair.get("priceChange") or {}
-            txns  = pair.get("txns") or {}
-            h1    = txns.get("h1") or {}
-
+            mc = float(pair.get("marketCap") or pair.get("fdv") or 0)
+            liq = float((pair.get("liquidity") or {}).get("usd") or 0)
+            vol = pair.get("volume") or {}
+            pc = pair.get("priceChange") or {}
+            txns = pair.get("txns") or {}
+            h1 = txns.get("h1") or {}
             cr = pair.get("pairCreatedAt") or 0
             if cr:
                 cd = datetime.fromtimestamp(cr / 1000)
-                created = cd.strftime("%Y-%m-%d %H:%M")
-                age_h = (datetime.now() - cd).total_seconds() / 3600
+                created, age_h = cd.strftime("%Y-%m-%d %H:%M"), (datetime.now() - cd).total_seconds() / 3600
             else:
                 created, age_h = "unknown", 0.0
-
             tw, tg, web = self._parse_socials(pair)
-
             return Token(
-                mint=mint,
-                name=base.get("name", "Unknown"),
-                symbol=base.get("symbol", "???"),
-                price=price,
-                mc=mc,
-                liq=liq,
-                vol1h=float(vol.get("h1") or 0),
-                vol6h=float(vol.get("h6") or 0),
+                mint=mint, name=base.get("name", "Unknown"),
+                symbol=base.get("symbol", "???"), price=price, mc=mc, liq=liq,
+                vol1h=float(vol.get("h1") or 0), vol6h=float(vol.get("h6") or 0),
                 vol24h=float(vol.get("h24") or 0),
-                chg5m=float(pc.get("m5") or 0),
-                chg1h=float(pc.get("h1") or 0),
-                chg6h=float(pc.get("h6") or 0),
-                chg24h=float(pc.get("h24") or 0),
-                buys1h=int(h1.get("buys") or 0),
-                sells1h=int(h1.get("sells") or 0),
-                has_twitter=tw,
-                has_telegram=tg,
-                has_website=web,
-                dex=pair.get("dexId", ""),
-                pair_addr=pair.get("pairAddress", ""),
-                created=created,
-                age_hours=age_h,
+                chg5m=float(pc.get("m5") or 0), chg1h=float(pc.get("h1") or 0),
+                chg6h=float(pc.get("h6") or 0), chg24h=float(pc.get("h24") or 0),
+                buys1h=int(h1.get("buys") or 0), sells1h=int(h1.get("sells") or 0),
+                has_twitter=tw, has_telegram=tg, has_website=web,
+                dex=pair.get("dexId", ""), pair_addr=pair.get("pairAddress", ""),
+                created=created, age_hours=age_h,
             )
         except Exception as e:
             log.debug(f"Parse pair error: {e}")
             return None
 
     def _parse_dex(self, data):
-        if not data:
-            return None
+        if not data: return None
         pairs = data if isinstance(data, list) else data.get("pairs") or []
-        if not pairs:
-            return None
-        sol  = [p for p in pairs if isinstance(p, dict) and p.get("chainId") == "solana"]
+        if not pairs: return None
+        sol = [p for p in pairs if isinstance(p, dict) and p.get("chainId") == "solana"]
         pool = sol or [p for p in pairs if isinstance(p, dict)]
-        if not pool:
-            return None
+        if not pool: return None
         best = max(pool, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
         return self._parse_pair(best)
 
     def _apply_rugcheck(self, t: Token, rc: dict) -> Token:
-        if not rc:
-            return t
-        t.is_rugged   = bool(rc.get("rugged"))
-        t.mint_auth   = rc.get("mintAuthority")
+        if not rc: return t
+        t.is_rugged = bool(rc.get("rugged"))
+        t.mint_auth = rc.get("mintAuthority")
         t.freeze_auth = rc.get("freezeAuthority")
-
         raw = int(rc.get("score") or 0)
         t.risk_raw = raw
-        if raw < 500:
-            t.risk_norm, t.risk_label = round(raw / 500 * 3, 1), "good"
-        elif raw < 2000:
-            t.risk_norm, t.risk_label = round(3 + (raw - 500) / 1500 * 4, 1), "warn"
-        else:
-            t.risk_norm, t.risk_label = min(10.0, round(7 + (raw - 2000) / 3000 * 3, 1)), "danger"
-
+        if raw < 500: t.risk_norm, t.risk_label = round(raw/500*3, 1), "good"
+        elif raw < 2000: t.risk_norm, t.risk_label = round(3+(raw-500)/1500*4, 1), "warn"
+        else: t.risk_norm, t.risk_label = min(10.0, round(7+(raw-2000)/3000*3, 1)), "danger"
         for mkt in rc.get("markets") or []:
-            lp  = mkt.get("lp") or {}
+            lp = mkt.get("lp") or {}
             pct = float(lp.get("lpLockedPct") or 0)
-            if pct > t.lp_burn:
-                t.lp_burn = pct
-            if (lp.get("lpBurned") or lp.get("burned") or
-                    lp.get("isBurned") or lp.get("burn")):
+            if pct > t.lp_burn: t.lp_burn = pct
+            if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
                 t.lp_burn = 100.0
-
         t.rc_risks = []
         for r in rc.get("risks") or []:
-            name  = r.get("name", "")
-            level = (r.get("level") or "").lower()
-            desc  = r.get("description", "")
-            val   = str(r.get("value") or "")
-            if name:
-                t.rc_risks.append((level, name, desc, val))
-
+            name = r.get("name", ""); level = (r.get("level") or "").lower()
+            desc = r.get("description", ""); val = str(r.get("value") or "")
+            if name: t.rc_risks.append((level, name, desc, val))
         t.top_holders = rc.get("topHolders") or []
         t.holder_count_rc = len(t.top_holders)
-
         return t
