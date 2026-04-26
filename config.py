@@ -48,3 +48,13 @@ class AgentConfig:
     SCAN_INTERVAL:     int  = int(os.getenv("SCAN_INTERVAL",    "120"))
     MONITOR_INTERVAL:  int  = int(os.getenv("MONITOR_INTERVAL", "60"))
     AUTO_SCAN_ENABLED: bool = os.getenv("AUTO_SCAN", "false").lower() == "true"
+
+    # ── HELIUS RPC (free tier) ────────────────────────────
+    HELIUS_API_KEY: str = os.getenv("HELIUS_API_KEY", "")
+
+    @property
+    def HELIUS_RPC_URL(self) -> str:
+        return f"https://mainnet.helius-rpc.com/?api-key={self.HELIUS_API_KEY}" if self.HELIUS_API_KEY else ""
+
+    # ── GMGN API (pribadi) ────────────────────────────────
+    GMGN_API_KEY: str = os.getenv("GMGN_API_KEY", "")

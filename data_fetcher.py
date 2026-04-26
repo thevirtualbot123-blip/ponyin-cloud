@@ -1,11 +1,5 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.0
-Fixes:
-  - GMGN data parsing: handle nested 'token' key, try multiple field name variants
-  - LP burn from GMGN burn_status / burn_ratio (authoritative source)
-  - Concurrent fetch (dex + gmgn + rugcheck simultaneously — 3x faster)
-  - chg5m (5-minute price change) parsed from DexScreener
-  - get_filtered_scan_mints(): DexScreener filter (MC/Liq/Vol/DEX/5M up trend)
+data_fetcher.py — PONYIN AI AGENT v7.0 + Helius fallback
 """
 import asyncio, aiohttp, logging, re
 from datetime import datetime
@@ -54,7 +48,6 @@ class DataFetcher:
         return await self._get(session, f"https://api.dexscreener.com/tokens/v1/solana/{mint}")
 
     async def dex_tokens_batch(self, session, mints: List[str]) -> list:
-        """Batch fetch up to 30 mints at once via comma-separated URL."""
         if not mints:
             return []
         batch_str = ",".join(mints[:30])
@@ -67,11 +60,12 @@ class DataFetcher:
     # ── GMGN API ────────────────────────────────────────
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         url = f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}"
+        api_key = self.cfg.GMGN_API_KEY if getattr(self.cfg, 'GMGN_API_KEY', '') else "gmgn_solbscbaseethmonadtron"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Accept": "application/json",
             "Referer": "https://gmgn.ai/",
-            "x-api-key": "gmgn_solbscbaseethmonadtron",
+            "x-api-key": api_key,
         }
         try:
             async with session.get(url, headers=headers, timeout=15) as r:
@@ -88,10 +82,6 @@ class DataFetcher:
 
     @staticmethod
     def _unwrap_gmgn(data: dict) -> dict:
-        """
-        GMGN API sometimes nests token data under 'token' key.
-        Transparently unwrap so callers always get a flat dict.
-        """
         if not data:
             return {}
         token_nested = data.get("token")
@@ -101,7 +91,6 @@ class DataFetcher:
 
     @staticmethod
     def _gmgn_float(data: dict, *keys, default: float = 0.0) -> float:
-        """Try multiple field name variants, return first non-None float."""
         for k in keys:
             v = data.get(k)
             if v is not None:
@@ -156,7 +145,7 @@ class DataFetcher:
             "creator_hold_pct", "creator_holding")
         t.dev_hold_pct = dev
 
-        # ── LP Burn (GMGN is authoritative) ───────────────
+        # ── LP Burn ───────────────────────────────────────
         burn_status = str(td.get("burn_status") or "").lower()
         burn_ratio_raw = td.get("burn_ratio") or td.get("lp_burn_ratio") or \
                          td.get("lpBurnRatio") or "0"
@@ -211,6 +200,67 @@ class DataFetcher:
             "fresh_wallet_rate", "freshWalletRate", "fresh_rate")
         t.rat_trader_rate = self._gmgn_float(td,
             "rat_trader_amount_rate", "ratTraderRate", "rat_trader_rate")
+
+        return t
+
+    # ── Helius Fallback ──────────────────────────────────
+    async def helius_get_largest_holders(self, session, mint: str) -> Optional[dict]:
+        if not self.cfg.HELIUS_API_KEY:
+            return None
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenLargestAccounts",
+            "params": [mint, {"commitment": "confirmed"}],
+        }
+        try:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=12) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    return data.get("result")
+        except Exception as e:
+            log.debug(f"Helius holders error: {e}")
+        return None
+
+    async def helius_get_token_supply(self, session, mint: str) -> Optional[dict]:
+        if not self.cfg.HELIUS_API_KEY:
+            return None
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTokenSupply",
+            "params": [mint, {"commitment": "confirmed"}],
+        }
+        try:
+            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload, timeout=8) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    return data.get("result")
+        except Exception as e:
+            log.debug(f"Helius supply error: {e}")
+        return None
+
+    def _apply_helius_holders(self, t: Token, holders_data: dict, supply_data: dict) -> Token:
+        if not holders_data or "value" not in holders_data:
+            return t
+
+        holder_list = holders_data["value"]
+        supply_info = supply_data.get("value") if supply_data else {}
+        ui_supply = float(supply_info.get("uiAmount", 0))
+
+        if ui_supply <= 0:
+            log.debug("Helius fallback: supply is 0, cannot compute Top10")
+            return t
+
+        total_ui = 0.0
+        for h in holder_list[:10]:
+            total_ui += float(h.get("uiAmount", 0))
+
+        if total_ui > 0:
+            top10 = (total_ui / ui_supply) * 100
+            t.top10_pct = round(top10, 1)
+            t.top10_source = f"Helius ({len(holder_list)} holders)"
+            t.holder_count_helius = len(holder_list)
 
         return t
 
@@ -326,7 +376,7 @@ class DataFetcher:
         log.info(f"Scan filter result: {len(candidates)} tokens pass")
         return candidates[:max_results]
 
-    # ── Fetch utama ─────────────────────────────────────
+    # ── Fetch utama (GMGN → Helius fallback) ────────────
     async def fetch_token(self, session, mint: str) -> Optional[Token]:
         dex_raw, gmgn_raw, rc_raw = await asyncio.gather(
             self.dex_token(session, mint),
@@ -347,8 +397,24 @@ class DataFetcher:
 
         if rc_raw:
             token = self._apply_rugcheck(token, rc_raw)
+
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
+
+        if token.top10_pct == 0 and self.cfg.HELIUS_API_KEY:
+            log.info(f"GMGN Top10 empty, falling back to Helius for {mint[:12]}...")
+            helius_holders, helius_supply = await asyncio.gather(
+                self.helius_get_largest_holders(session, mint),
+                self.helius_get_token_supply(session, mint),
+                return_exceptions=True,
+            )
+            if not isinstance(helius_holders, Exception) and helius_holders:
+                if not isinstance(helius_supply, Exception) and helius_supply:
+                    token = self._apply_helius_holders(token, helius_holders, helius_supply)
+                else:
+                    log.warning("Helius supply fetch failed, cannot compute Top10")
+            else:
+                log.warning("Helius holders fetch failed, Top10 stays N/A")
 
         return token
 
@@ -479,23 +545,7 @@ class DataFetcher:
             if name:
                 t.rc_risks.append((level, name, desc, val))
 
-        if t.top10_pct == 0:
-            top_h = rc.get("topHolders") or []
-            t.top_holders = top_h
-            if top_h:
-                total = 0.0
-                for h in top_h[:10]:
-                    pct = float(h.get("pct") or 0)
-                    if 0 < pct <= 1.0:
-                        pct *= 100
-                    total += pct
-                if total > 0:
-                    t.top10_pct = round(total, 1)
-                    t.top10_source = f"RugCheck ({len(top_h)})"
-                    t.holder_count_rc = len(top_h)
-        else:
-            t.top_holders = rc.get("topHolders") or []
-            if not t.holder_count_rc:
-                t.holder_count_rc = len(t.top_holders)
+        t.top_holders = rc.get("topHolders") or []
+        t.holder_count_rc = len(t.top_holders)
 
         return t

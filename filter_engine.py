@@ -1,10 +1,5 @@
 """
 filter_engine.py — PONYIN AI AGENT v7.0
-Fixes:
-  - Token: add chg5m (5m price change) and gmgn_lp_burned flag
-  - _detect_dev_farm: don't flag HIGH when GMGN confirms LP is burned
-  - _apply_filters S4: recognise gmgn_lp_burned as valid LP burn proof
-  - to_dict: expose chg5m, source, price fields used by telegram_bot
 """
 import re, logging
 from datetime import datetime
@@ -32,7 +27,7 @@ class Token:
     vol1h: float = 0.0
     vol6h: float = 0.0
     vol24h: float = 0.0
-    chg5m: float = 0.0          # 5-minute price change
+    chg5m: float = 0.0
     chg1h: float = 0.0
     chg6h: float = 0.0
     chg24h: float = 0.0
@@ -181,7 +176,6 @@ class FilterEngine:
         try:
             t = self._classify(t)
             t = self._detect_bonding_curve(t)
-            t = self._clean_top10(t)
             t = self._sync_gmgn_lp_burn(t)
             if hasattr(t, 'gmgn_data') and t.gmgn_data:
                 t = self._analyze_gmgn_holders(t, t.gmgn_data)
@@ -226,39 +220,23 @@ class FilterEngine:
             t.is_bonding_curve = False
         return t
 
-    def _clean_top10(self, t: Token) -> Token:
-        return t
-
-    # ── GMGN Analysis ──────────────────────────────────
     def _analyze_gmgn_holders(self, t: Token, data: dict) -> Token:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
-        if t.top10_pct == 0:
-            for key in ("top_10_holder_pct", "top_10_holder_rate",
-                        "top10HolderPercent", "top10_holder_rate"):
-                raw = td.get(key)
-                if raw is not None:
-                    try:
-                        v = float(raw)
-                        if 0 < v <= 1.0: v *= 100
-                        if 0 < v <= 100:
-                            t.top10_pct = round(v, 1)
-                            t.top10_source = "GMGN"
-                    except (ValueError, TypeError):
-                        pass
-                    break
-
-        # Fallback ke RugCheck jika Top10 masih 0
-        if t.top10_pct == 0 and t.top_holders:
-            total = 0.0
-            for h in t.top_holders[:10]:
-                pct = float(h.get("pct", 0) or 0)
-                if 0 < pct <= 1.0: pct *= 100
-                total += pct
-            if total > 0:
-                t.top10_pct = round(total, 1)
-                t.top10_source = f"RugCheck fallback ({len(t.top_holders)})"
+        for key in ("top_10_holder_pct", "top_10_holder_rate",
+                    "top10HolderPercent", "top10_holder_rate"):
+            raw = td.get(key)
+            if raw is not None:
+                try:
+                    v = float(raw)
+                    if 0 < v <= 1.0: v *= 100
+                    if 0 < v <= 100:
+                        t.top10_pct = round(v, 1)
+                        t.top10_source = "GMGN"
+                except (ValueError, TypeError):
+                    pass
+                break
 
         if not t.holder_count_gmgn:
             for key in ("holder_count", "holder", "holderCount"):
@@ -266,9 +244,6 @@ class FilterEngine:
                 if hc:
                     t.holder_count_gmgn = int(hc)
                     break
-
-        if not t.holder_count_gmgn and t.holder_count_rc:
-            t.holder_count_gmgn = t.holder_count_rc
 
         return t
 
@@ -287,7 +262,6 @@ class FilterEngine:
             t.smart_money_present = True
         return t
 
-    # ── Wash Trading ─────────────────────────────────────
     def _detect_wash_trading(self, t: Token) -> Token:
         reasons = []
         total_txn = t.buys1h + t.sells1h
@@ -303,7 +277,6 @@ class FilterEngine:
         t.wash_trading_reason = " | ".join(reasons)
         return t
 
-    # ── Cluster ──────────────────────────────────────────
     def _detect_cluster(self, t: Token) -> Token:
         if not t.top_holders:
             t.cluster_risk   = "UNKNOWN"
@@ -340,13 +313,12 @@ class FilterEngine:
         t.cluster_reason = " | ".join(reasons) if reasons else f"Score {score}/100 normal"
         return t
 
-    # ── Dev Farm ─────────────────────────────────────────
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
         lp_is_safe = t.lp_burn >= 80 or t.is_bonding_curve or t.gmgn_lp_burned
         if not lp_is_safe:
             if t.lp_burn == 0:
-                if t.age_hours < 1.0 and t.vol1h > t.liq * 2 and t.liq > 0:
+                if t.age_hours < 1.0 and t.liq > 0 and t.vol1h > t.liq * 2:
                     reasons.append("LP 0% (fresh + high vol — tolerable)")
                 else:
                     reasons.append("LP 0%")
