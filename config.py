@@ -1,11 +1,10 @@
-"""config.py — Konfigurasi PONYIN AI AGENT v5.0 (Helius + Solscan fallback)"""
+"""config.py — Konfigurasi PONYIN AI AGENT v7.0"""
 import os
 from dataclasses import dataclass
 
 @dataclass
 class AgentConfig:
 
-    # ── TELETHON (baca signal channel) ────────────────────
     TG_API_ID:   str = os.getenv("TELEGRAM_API_ID",   "")
     TG_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TG_PHONE:    str = os.getenv("TELEGRAM_PHONE",    "")
@@ -18,18 +17,15 @@ class AgentConfig:
         raw = self._SIGNAL_CHANNELS_RAW
         return [c.strip() for c in raw.split(",") if c.strip()] if raw else []
 
-    # ── TELEGRAM BOT (notif & command ke kamu) ─────────────
     BOT_TOKEN:   str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     BOT_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID",  "")
 
-    # ── ANTHROPIC AI (opsional) ────────────────────────────
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     @property
     def AI_ENABLED(self) -> bool:
         return bool(self.ANTHROPIC_API_KEY)
 
-    # ── FILTER ─────────────────────────────────────────────
     MIN_MC:        float = float(os.getenv("MIN_MC",    "8000"))
     MAX_MC:        float = float(os.getenv("MAX_MC",    "800000"))
     MIN_LIQ:       float = float(os.getenv("MIN_LIQ",  "3000"))
@@ -37,32 +33,18 @@ class AgentConfig:
     MAX_RISK_NORM: float = float(os.getenv("MAX_RISK",  "5.0"))
     MAX_AGE_HOURS: float = float(os.getenv("MAX_AGE_H", "48"))
 
-    # ── TRADING ────────────────────────────────────────────
     TP1_PCT:  float = float(os.getenv("TP1",  "30"))
     TP2_PCT:  float = float(os.getenv("TP2",  "50"))
     SL_PCT:   float = float(os.getenv("SL",   "20"))
     DCA1_PCT: float = float(os.getenv("DCA1", "20"))
     DCA2_PCT: float = float(os.getenv("DCA2", "35"))
 
-    # ── PORTFOLIO ──────────────────────────────────────────
     PORTFOLIO_SOL: float = float(os.getenv("PORTFOLIO_SOL", "1.0"))
     MAX_POSITIONS: int   = int(os.getenv("MAX_POSITIONS",   "3"))
     SIZE_HIGH:     float = float(os.getenv("SIZE_HIGH",  "0.25"))
     SIZE_MEDIUM:   float = float(os.getenv("SIZE_MEDIUM","0.15"))
     SIZE_LOW:      float = float(os.getenv("SIZE_LOW",   "0.08"))
 
-    # ── INTERVALS ──────────────────────────────────────────
     SCAN_INTERVAL:     int  = int(os.getenv("SCAN_INTERVAL",    "120"))
     MONITOR_INTERVAL:  int  = int(os.getenv("MONITOR_INTERVAL", "60"))
     AUTO_SCAN_ENABLED: bool = os.getenv("AUTO_SCAN", "false").lower() == "true"
-
-    # ── HELIUS RPC (free tier: https://dev.helius.xyz/) ──
-    HELIUS_API_KEY: str = os.getenv("HELIUS_API_KEY", "")
-
-    @property
-    def HELIUS_RPC_URL(self) -> str:
-        return f"https://mainnet.helius-rpc.com/?api-key={self.HELIUS_API_KEY}" if self.HELIUS_API_KEY else ""
-    
-    @property
-    def HELIUS_ENABLED(self) -> bool:
-        return bool(self.HELIUS_API_KEY)

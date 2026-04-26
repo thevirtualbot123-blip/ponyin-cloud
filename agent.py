@@ -144,7 +144,6 @@ class PonyinAgent:
 
         from_channel = source.startswith("TG:")
         if (manual or "MASUK" in v or "WATCH" in v) and self.cfg.BOT_TOKEN:
-            # ← FIX: include source in token_dict so Telegram shows it
             token_dict = {**token.to_dict(), "source": source}
             dec_dict   = {
                 "action":     decision.action,
@@ -203,7 +202,6 @@ class PonyinAgent:
             await self.bot.send(format_log(records))
 
         elif command == "/scan":
-            # ── FILTERED SCAN (sesuai Scan Filter image) ─────────────
             await self.bot.send(
                 "🔍 <b>Scanning dengan DexScreener filter...</b>\n"
                 "├ MC: <b>$5K – $50K</b>\n"
@@ -229,7 +227,6 @@ class PonyinAgent:
                     )
                     return
 
-                # Filter out already-processed (dedup)
                 new_candidates = [
                     (chg5m, mint)
                     for chg5m, mint in filtered

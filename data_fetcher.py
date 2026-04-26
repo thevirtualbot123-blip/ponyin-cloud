@@ -127,7 +127,6 @@ class DataFetcher:
         td = self._unwrap_gmgn(data)
 
         # ── Top 10 holders ────────────────────────────────
-        # GMGN returns decimal (0.177) or percentage (17.7) — handle both
         for key in ("top_10_holder_pct", "top_10_holder_rate",
                     "top10HolderPercent", "top10_holder_rate",
                     "topHolderRate", "top_10_holder_percent"):
@@ -136,13 +135,13 @@ class DataFetcher:
                 try:
                     v = float(raw)
                     if 0 < v <= 1.0:
-                        v *= 100          # decimal → percentage
+                        v *= 100
                     if 0 < v <= 100:
                         t.top10_pct = round(v, 1)
                         t.top10_source = "GMGN"
                 except (ValueError, TypeError):
                     pass
-                break  # found the key, stop trying others
+                break
 
         # ── Holder count ──────────────────────────────────
         hc = self._gmgn_int(td,
@@ -158,8 +157,6 @@ class DataFetcher:
         t.dev_hold_pct = dev
 
         # ── LP Burn (GMGN is authoritative) ───────────────
-        # burn_status: "burn" / "burned" / "not_burn" / ""
-        # burn_ratio:  "1" / "0.95" / "0"
         burn_status = str(td.get("burn_status") or "").lower()
         burn_ratio_raw = td.get("burn_ratio") or td.get("lp_burn_ratio") or \
                          td.get("lpBurnRatio") or "0"
@@ -250,7 +247,7 @@ class DataFetcher:
         d = await self._get(session, "https://api.rugcheck.xyz/v1/stats/new_tokens")
         return d if isinstance(d, list) else []
 
-    # ── FILTERED SCAN (Scan Filter image) ───────────────
+    # ── FILTERED SCAN ────────────────────────────────────
     async def get_filtered_scan_mints(
         self, session,
         min_mc: float = 5_000,
@@ -260,23 +257,14 @@ class DataFetcher:
         allowed_dex: set = None,
         max_results: int = 20,
     ) -> List[Tuple[float, str]]:
-        """
-        Discover fresh Solana tokens that pass the DexScreener scan filter:
-          MC $5K-$50K | Liq ≥$1K | 1H Vol ≥$3K
-          DEX: PumpFun / Raydium / Meteora
-          Sort by 5M price change ↑ (trending up)
-
-        Returns list of (chg5m, mint) tuples sorted by chg5m descending.
-        """
         if allowed_dex is None:
             allowed_dex = {
                 "pump_fun", "pumpfun", "pump.fun",
                 "raydium",
                 "meteora",
-                "orca",       # often used after pump grad
+                "orca",
             }
 
-        # Step 1 — collect candidate mints from discovery sources
         raw_mints = await self.get_new_token_mints(session)
         if not raw_mints:
             log.warning("Scan: no raw mints from discovery sources")
@@ -284,7 +272,6 @@ class DataFetcher:
 
         log.info(f"Scan: {len(raw_mints)} raw candidates, applying DexScreener filter...")
 
-        # Step 2 — batch-fetch DexScreener pair data (30 per request)
         all_pairs = []
         batch_size = 30
         batches = [raw_mints[i:i+batch_size]
@@ -299,7 +286,6 @@ class DataFetcher:
 
         log.info(f"Scan: {len(all_pairs)} pairs fetched from DexScreener")
 
-        # Step 3 — apply filters
         candidates: List[Tuple[float, str]] = []
         seen_mints: set = set()
 
@@ -320,16 +306,12 @@ class DataFetcher:
             chg5m  = float((pair.get("priceChange") or {}).get("m5") or 0)
             dex_id = (pair.get("dexId") or "").lower().replace(".", "_").replace("-", "_")
 
-            # MC range filter
             if not (min_mc <= mc <= max_mc):
                 continue
-            # Liquidity filter
             if liq < min_liq:
                 continue
-            # Volume 1h filter
             if vol1h < min_vol1h:
                 continue
-            # DEX filter (flexible matching)
             dex_match = any(
                 allowed in dex_id or dex_id in allowed
                 for allowed in allowed_dex
@@ -340,19 +322,12 @@ class DataFetcher:
             seen_mints.add(mint)
             candidates.append((chg5m, mint))
 
-        # Step 4 — sort by 5M change descending (trending up = higher priority)
         candidates.sort(key=lambda x: x[0], reverse=True)
-
-        log.info(
-            f"Scan filter result: {len(candidates)} tokens pass "
-            f"(MC ${min_mc/1000:.0f}K-${max_mc/1000:.0f}K, "
-            f"Liq ≥${min_liq/1000:.0f}K, Vol1h ≥${min_vol1h/1000:.0f}K)"
-        )
+        log.info(f"Scan filter result: {len(candidates)} tokens pass")
         return candidates[:max_results]
 
-    # ── Fetch utama (CONCURRENT — 3x faster) ────────────
+    # ── Fetch utama ─────────────────────────────────────
     async def fetch_token(self, session, mint: str) -> Optional[Token]:
-        # Fetch all 3 sources concurrently
         dex_raw, gmgn_raw, rc_raw = await asyncio.gather(
             self.dex_token(session, mint),
             self.gmgn_token_info(session, mint),
@@ -360,20 +335,16 @@ class DataFetcher:
             return_exceptions=True,
         )
         if isinstance(dex_raw, Exception):
-            log.debug(f"DexScreener error {mint[:12]}: {dex_raw}")
             dex_raw = None
         if isinstance(gmgn_raw, Exception):
-            log.debug(f"GMGN error {mint[:12]}: {gmgn_raw}")
             gmgn_raw = None
         if isinstance(rc_raw, Exception):
-            log.debug(f"RugCheck error {mint[:12]}: {rc_raw}")
             rc_raw = None
 
         token = self._parse_dex(dex_raw)
         if not token:
             return None
 
-        # Apply RugCheck first, then GMGN (GMGN overrides RC for better accuracy)
         if rc_raw:
             token = self._apply_rugcheck(token, rc_raw)
         if gmgn_raw:
@@ -443,7 +414,7 @@ class DataFetcher:
                 vol1h=float(vol.get("h1") or 0),
                 vol6h=float(vol.get("h6") or 0),
                 vol24h=float(vol.get("h24") or 0),
-                chg5m=float(pc.get("m5") or 0),     # ← NEW: 5m change
+                chg5m=float(pc.get("m5") or 0),
                 chg1h=float(pc.get("h1") or 0),
                 chg6h=float(pc.get("h6") or 0),
                 chg24h=float(pc.get("h24") or 0),
@@ -495,7 +466,6 @@ class DataFetcher:
             pct = float(lp.get("lpLockedPct") or 0)
             if pct > t.lp_burn:
                 t.lp_burn = pct
-            # Check multiple burn field variants
             if (lp.get("lpBurned") or lp.get("burned") or
                     lp.get("isBurned") or lp.get("burn")):
                 t.lp_burn = 100.0

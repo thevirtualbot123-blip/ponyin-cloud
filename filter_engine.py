@@ -32,7 +32,7 @@ class Token:
     vol1h: float = 0.0
     vol6h: float = 0.0
     vol24h: float = 0.0
-    chg5m: float = 0.0          # ← NEW: 5-minute price change
+    chg5m: float = 0.0          # 5-minute price change
     chg1h: float = 0.0
     chg6h: float = 0.0
     chg24h: float = 0.0
@@ -70,7 +70,7 @@ class Token:
     rug_ratio: float = 0.0
     wash_trade_gmgn: bool = False
     fresh_wallet_rate: float = 0.0
-    gmgn_lp_burned: bool = False   # ← NEW: GMGN confirms LP is burned
+    gmgn_lp_burned: bool = False
     # Advanced
     wash_trading_flag: bool = False
     wash_trading_reason: str = ""
@@ -117,7 +117,7 @@ class Token:
             "liq": self.liq,
             "vol1h": self.vol1h,
             "vol24h": self.vol24h,
-            "chg5m": self.chg5m,      # ← NEW
+            "chg5m": self.chg5m,
             "chg1h": self.chg1h,
             "chg24h": self.chg24h,
             "top10_pct": self.top10_pct,
@@ -144,7 +144,7 @@ class Token:
             "holder_health": self.holder_health,
             "momentum_score": self.momentum_score,
             "holder_count_rc": self.holder_count_rc,
-            "holder_count_gmgn": self.holder_count_gmgn,   # ← NEW
+            "holder_count_gmgn": self.holder_count_gmgn,
             "bounce_potential": self.bounce_potential,
             "liq_trap_risk": self.liq_trap_risk,
             "is_bonding_curve": self.is_bonding_curve,
@@ -156,13 +156,13 @@ class Token:
             "dex": self.dex,
             "buys1h": self.buys1h,
             "sells1h": self.sells1h,
-            "dev_hold_pct": self.dev_hold_pct,              # ← NEW
-            "bundle_pct": self.bundle_pct,                  # ← NEW
-            "sniper_count": self.sniper_count,              # ← NEW
-            "kol_holders": self.kol_holders,                # ← NEW
-            "fresh_wallet_rate": self.fresh_wallet_rate,    # ← NEW
-            "rug_ratio": self.rug_ratio,                    # ← NEW
-            "gmgn_lp_burned": self.gmgn_lp_burned,         # ← NEW
+            "dev_hold_pct": self.dev_hold_pct,
+            "bundle_pct": self.bundle_pct,
+            "sniper_count": self.sniper_count,
+            "kol_holders": self.kol_holders,
+            "fresh_wallet_rate": self.fresh_wallet_rate,
+            "rug_ratio": self.rug_ratio,
+            "gmgn_lp_burned": self.gmgn_lp_burned,
         }
 
 @dataclass
@@ -182,7 +182,6 @@ class FilterEngine:
             t = self._classify(t)
             t = self._detect_bonding_curve(t)
             t = self._clean_top10(t)
-            # Propagate gmgn_lp_burned from raw data
             t = self._sync_gmgn_lp_burn(t)
             if hasattr(t, 'gmgn_data') and t.gmgn_data:
                 t = self._analyze_gmgn_holders(t, t.gmgn_data)
@@ -207,10 +206,6 @@ class FilterEngine:
         return t
 
     def _sync_gmgn_lp_burn(self, t: Token) -> Token:
-        """
-        If GMGN already set lp_burn ≥ 95 (via burn_status/burn_ratio in data_fetcher),
-        ensure gmgn_lp_burned flag is True so downstream logic uses it.
-        """
         if t.lp_burn >= 95:
             t.gmgn_lp_burned = True
         return t
@@ -236,7 +231,6 @@ class FilterEngine:
 
     # ── GMGN Analysis ──────────────────────────────────
     def _analyze_gmgn_holders(self, t: Token, data: dict) -> Token:
-        """Re-parse in case data_fetcher didn't unwrap nested key."""
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
@@ -255,12 +249,26 @@ class FilterEngine:
                         pass
                     break
 
+        # Fallback ke RugCheck jika Top10 masih 0
+        if t.top10_pct == 0 and t.top_holders:
+            total = 0.0
+            for h in t.top_holders[:10]:
+                pct = float(h.get("pct", 0) or 0)
+                if 0 < pct <= 1.0: pct *= 100
+                total += pct
+            if total > 0:
+                t.top10_pct = round(total, 1)
+                t.top10_source = f"RugCheck fallback ({len(t.top_holders)})"
+
         if not t.holder_count_gmgn:
             for key in ("holder_count", "holder", "holderCount"):
                 hc = td.get(key)
                 if hc:
                     t.holder_count_gmgn = int(hc)
                     break
+
+        if not t.holder_count_gmgn and t.holder_count_rc:
+            t.holder_count_gmgn = t.holder_count_rc
 
         return t
 
@@ -335,13 +343,9 @@ class FilterEngine:
     # ── Dev Farm ─────────────────────────────────────────
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
-
-        # LP check — skip if GMGN already confirmed it's burned
         lp_is_safe = t.lp_burn >= 80 or t.is_bonding_curve or t.gmgn_lp_burned
-
         if not lp_is_safe:
             if t.lp_burn == 0:
-                # Fresh token with high volume may not have LP locked yet
                 if t.age_hours < 1.0 and t.vol1h > t.liq * 2 and t.liq > 0:
                     reasons.append("LP 0% (fresh + high vol — tolerable)")
                 else:
@@ -350,22 +354,18 @@ class FilterEngine:
             elif t.lp_burn < 50:
                 reasons.append(f"LP {t.lp_burn:.0f}%")
                 if risk == "LOW": risk = "MEDIUM"
-
         if t.mint_auth:
             reasons.append("Mint auth aktif")
             risk = "HIGH"
-
         if t.risk_norm > 6:
             reasons.append(f"risk {t.risk_norm}/10")
             if risk == "LOW": risk = "MEDIUM"
-
         kws = ["dev", "creator", "deployer", "farm", "bundle", "sniper"]
         for (lvl, nm, dc, vl) in t.rc_risks:
             if any(k in (nm + dc).lower() for k in kws):
                 reasons.append(f"[{lvl}] {nm}")
                 if lvl == "danger":                risk = "HIGH"
                 elif lvl == "warn" and risk == "LOW": risk = "MEDIUM"
-
         t.dev_farm_risk   = risk
         t.dev_farm_reason = " | ".join(reasons) if reasons else "Clean"
         return t
@@ -401,7 +401,6 @@ class FilterEngine:
 
     def _detect_smart_money(self, t: Token) -> Token:
         if not t.top_holders:
-            # Still keep the GMGN smart money flag if set
             return t
         count, total = 0, 0.0
         for h in t.top_holders[:20]:
@@ -440,26 +439,21 @@ class FilterEngine:
         elif c1 > -10: score -=  3
         elif c1 > -20: score -= 10
         else:           score -= 20
-
-        # Bonus for strong 5m trend
         c5 = t.chg5m
         if   c5 > 50: score += 10
         elif c5 > 20: score += 6
         elif c5 > 10: score += 3
         elif c5 < -20: score -= 8
-
         bsr = t.buy_sell_ratio
         if   bsr > 0.75: score += 15
         elif bsr > 0.60: score +=  8
         elif bsr > 0.45: score +=  2
         elif bsr < 0.30: score -= 10
         elif bsr < 0.40: score -=  5
-
         if t.liq > 0 and t.vol1h > 0:
             vl = safe_div(t.vol1h, t.liq, 0)
             if   vl > 3.0: score += 10
             elif vl > 1.0: score +=  5
-
         t.momentum_score = max(0, min(100, score))
         return t
 
@@ -503,7 +497,7 @@ class FilterEngine:
         if t.wash_trading_flag:                      score -= 20
         if   t.lp_burn >= 95:                        score += 15
         elif t.lp_burn >= 80:                        score +=  8
-        elif t.gmgn_lp_burned:                       score += 15   # ← trust GMGN burn
+        elif t.gmgn_lp_burned:                       score += 15
         elif t.lp_burn == 0 and not t.is_bonding_curve: score -= 10
         elif 0 < t.lp_burn < 50:                     score -=  5
         if t.smart_money_present:  score +=  8
@@ -559,7 +553,6 @@ class FilterEngine:
         elif t.fee_health == "WARNING":
             info("Fee/Holder", t.fee_health_reason[:60], "WARNING")
 
-        # ── S1 Authority ─────────────────────────────────
         if t.mint_auth:
             bad("S1 Mint Auth", "AKTIF — dev bisa cetak token", "ACTIVE ⛔")
         elif t.freeze_auth:
@@ -568,7 +561,6 @@ class FilterEngine:
             lp_display = "100% (GMGN)" if t.gmgn_lp_burned else f"{t.lp_burn:.0f}%"
             ok("S1 Authority", f"Revoked | LP {lp_display} burned", "Aman ✓")
 
-        # ── S2 MC & Liq ──────────────────────────────────
         if t.mc <= 0:
             bad("S2 MC", "Data tidak tersedia", "N/A")
         elif t.mc < cfg.MIN_MC and not t.is_bonding_curve:
@@ -593,7 +585,6 @@ class FilterEngine:
             else:
                 ok("S2 MC & Liq", f"MC ${t.mc:,.0f} | Liq ${t.liq:,.0f} ({r:.1%})", "✓")
 
-        # ── S3 Top10 ─────────────────────────────────────
         if t.top10_pct == 0:
             info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual di GMGN")
         elif t.top10_pct > 55:
@@ -604,14 +595,12 @@ class FilterEngine:
         else:
             ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
 
-        # ── S4 Risk & LP ─────────────────────────────────
         rn = t.risk_norm
         if rn > 7:
             bad("S4 Risk", f"{rn}/10 [{t.risk_label.upper()}] BAHAYA", f"{rn}/10 ⛔")
         elif rn > cfg.MAX_RISK_NORM:
             bad("S4 Risk", f"{rn}/10 > max {cfg.MAX_RISK_NORM}", f"{rn}/10")
         elif t.lp_burn == 0 and not t.is_bonding_curve:
-            # KEY FIX: check GMGN burn confirmation before flagging
             if t.gmgn_lp_burned:
                 ok("S4 LP Burn", "100% (GMGN confirmed burned)", "Burned ✓")
             elif t.vol1h > 10000 and t.age_hours < 0.5 and t.buys1h > 50:
@@ -624,7 +613,6 @@ class FilterEngine:
             lp_val = "100% (GMGN)" if t.gmgn_lp_burned else f"{t.lp_burn:.0f}%"
             ok("S4 Risk & LP", f"{rn}/10 [{t.risk_label}] | LP {lp_val}", "OK ✓")
 
-        # ── S5 Cluster ───────────────────────────────────
         cs, cr = t.cluster_score, t.cluster_risk
         if cr == "HIGH":
             bad("S5 Cluster", f"Score {cs}/100 — {t.cluster_reason[:50]}", f"HIGH ({cs})")
@@ -635,7 +623,6 @@ class FilterEngine:
         else:
             info("S5 Cluster", "UNKNOWN", "Data kurang — cek BubbleMaps")
 
-        # ── S6 Dev Farm ──────────────────────────────────
         if t.dev_farm_risk == "HIGH":
             bad("S6 Dev Farm", t.dev_farm_reason[:55], "HIGH ⚠")
         elif t.dev_farm_risk == "MEDIUM":
@@ -643,37 +630,29 @@ class FilterEngine:
         else:
             ok("S6 Dev Farm", "LOW", "Clean ✓")
 
-        # ── S7 GMGN Security ─────────────────────────────
         if t.is_honeypot:
             bad("S7 Honeypot", "Terdeteksi honeypot oleh GMGN", "HONEYPOT ⛔")
-
         if t.rug_ratio > 0.5:
             bad("S7 Rug Ratio", f"Rug ratio {t.rug_ratio:.2f} — high risk",
                 f"{t.rug_ratio:.2f}")
-
         if t.wash_trade_gmgn:
             bad("S7 Wash Trade (GMGN)", "GMGN mendeteksi wash trading", "WASH ⚠")
-
         if t.dev_hold_pct > 3:
             bad("S7 Dev Supply",
                 f"Dev hold {t.dev_hold_pct:.1f}% — belum lepas semua",
                 f"{t.dev_hold_pct:.1f}%")
-
         if t.bundle_pct > 40:
             bad("S7 Bundle",
                 f"Bundle {t.bundle_pct:.1f}% > 40%", f"{t.bundle_pct:.1f}%")
-
         if t.sniper_count > 10:
             bad("S7 Sniper",
                 f"{t.sniper_count} sniper wallets — potensi dump",
                 f"{t.sniper_count}")
-
         if t.rat_trader_rate > 0.3:
             bad("S7 Insider",
                 f"Rat trader {t.rat_trader_rate:.1%} — insider dominated",
                 f"{t.rat_trader_rate:.1%}")
 
-        # ── Bonus info (tidak nambah flag) ───────────────
         if t.smart_money_count > 5:
             ok("Smart Money", f"{t.smart_money_count} smart degens", "Bullish ✓")
         if t.kol_holders > 0:
@@ -731,7 +710,6 @@ class FilterEngine:
         elif hh >= 40: info("Hldr Health",  f"{hh}/100", "Moderate")
         else:           info("Hldr Health", f"{hh}/100", "Concern")
 
-        # GMGN extra metrics
         if t.fresh_wallet_rate > 0.3:
             info("Fresh Wallets", f"{t.fresh_wallet_rate:.0%}", "⚠ Banyak fresh wallet")
         if t.rug_ratio > 0 and t.rug_ratio <= 0.5:
