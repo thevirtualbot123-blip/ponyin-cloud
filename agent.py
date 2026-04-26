@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-PONYIN AI AGENT v6.0 — GMGN Integration + Direct /check
+PONYIN AI AGENT v7.0
+Fixes:
+  - /scan uses get_filtered_scan_mints() with DexScreener filter
+    (MC $5K-$50K | Liq ≥$1K | Vol1h ≥$3K | PF/Raydium/Meteora | 5M↑)
+  - source field added to token_dict so Telegram shows it correctly
+  - /scan message shows filter params
 """
 import asyncio, sys, os, json, logging
 from datetime import datetime
@@ -37,7 +42,7 @@ def banner():
     print(f"""
 {C}{B}
 ╔══════════════════════════════════════════════════════════════════╗
-║     PONYIN AI AGENT v6.0 — GMGN + Direct Check                 ║
+║     PONYIN AI AGENT v7.0 — GMGN Fix + Filtered Scan            ║
 ╚══════════════════════════════════════════════════════════════════╝{R}
 """)
 
@@ -58,14 +63,13 @@ class PonyinAgent:
         self.tg_listener = TelegramListener(self.cfg, self._on_signal)
         self._processed: dict = {}
         self._DEDUP_MINUTES   = 30
-        self._queue = asyncio.Queue()
-        self._stats = {"total": 0, "masuk": 0, "watch": 0, "skip": 0}
+        self._queue  = asyncio.Queue()
+        self._stats  = {"total": 0, "masuk": 0, "watch": 0, "skip": 0}
 
     def _is_duplicate(self, mint: str) -> bool:
         if mint not in self._processed:
             return False
-        last = self._processed[mint]
-        age  = (datetime.now() - last).total_seconds() / 60
+        age = (datetime.now() - self._processed[mint]).total_seconds() / 60
         return age < self._DEDUP_MINUTES
 
     def _mark_processed(self, mint: str):
@@ -83,10 +87,10 @@ class PonyinAgent:
 
     async def _fetch_and_decide(self, mint, source, raw):
         async with self.fetcher.session() as session:
-            token = await self.fetcher.fetch_token(session, mint)
+            token    = await self.fetcher.fetch_token(session, mint)
             if not token:
                 return None, None
-            token = self.filter.run(token)
+            token    = self.filter.run(token)
             decision = await self.decision.decide(token, source, raw)
             return token, decision
 
@@ -107,10 +111,10 @@ class PonyinAgent:
         try:
             token, decision = await asyncio.wait_for(
                 self._fetch_and_decide(mint, source, raw),
-                timeout=30.0
+                timeout=35.0
             )
         except asyncio.TimeoutError:
-            msg = f"⏰ Timeout 30dtk saat analisis:\n<code>{mint}</code>"
+            msg = f"⏰ Timeout saat analisis:\n<code>{mint}</code>"
             print(f"{RD}Timeout.{R}")
             if manual:
                 await self.bot.send(msg)
@@ -128,10 +132,8 @@ class PonyinAgent:
                 await self.bot.send(msg)
             return
 
-        # Display
         self.display.print_signal(token, decision, source)
 
-        # Stats
         self._stats["total"] += 1
         v = token.verdict
         if "MASUK" in v:   self._stats["masuk"] += 1
@@ -140,10 +142,10 @@ class PonyinAgent:
 
         self._log_signal(token, decision, source)
 
-        # Kirim ke bot
         from_channel = source.startswith("TG:")
         if (manual or "MASUK" in v or "WATCH" in v) and self.cfg.BOT_TOKEN:
-            token_dict = {**token.to_dict()}
+            # ← FIX: include source in token_dict so Telegram shows it
+            token_dict = {**token.to_dict(), "source": source}
             dec_dict   = {
                 "action":     decision.action,
                 "conviction": decision.conviction,
@@ -180,42 +182,82 @@ class PonyinAgent:
 
     async def _handle_bot_command(self, command: str, args: str):
         log.info(f"Bot cmd: {command} args={args[:30]}")
+
         if command in ("/start", "/help"):
             await self.bot.send(
-                "🤖 <b>PONYIN AI AGENT v6.0</b>\n\n"
+                "🤖 <b>PONYIN AI AGENT v7.0</b>\n\n"
                 "<b>Commands:</b>\n"
-                "/scan — scan token baru sekali\n"
+                "/scan — scan token baru (filter DexScreener)\n"
                 "/check &lt;CA&gt; — analisis satu token\n"
                 "/status — statistik hari ini\n"
                 "/log — 10 signal terakhir\n"
                 "/help — perintah ini\n\n"
                 "Atau <b>paste CA (32+ karakter)</b> langsung"
             )
+
         elif command == "/status":
             await self.bot.send(format_status(self._stats, len(self._processed)))
+
         elif command == "/log":
             records = self._load_log(10)
             await self.bot.send(format_log(records))
+
         elif command == "/scan":
-            await self.bot.send("🔍 <b>Scanning token baru sekali...</b>")
+            # ── FILTERED SCAN (sesuai Scan Filter image) ─────────────
+            await self.bot.send(
+                "🔍 <b>Scanning dengan DexScreener filter...</b>\n"
+                "├ MC: <b>$5K – $50K</b>\n"
+                "├ Liq min: <b>$1K</b>\n"
+                "├ Vol 1H min: <b>$3K</b>\n"
+                "├ DEX: <b>PumpFun / Raydium / Meteora</b>\n"
+                "└ Sort: <b>5M UP Trends ↑</b>"
+            )
             try:
                 async with self.fetcher.session() as session:
-                    mints = await self.fetcher.get_new_token_mints(session)
-                    new   = [m for m in mints if not self._is_duplicate(m)]
-                    if not new:
-                        await self.bot.send("✅ Tidak ada token baru saat ini.")
-                        return
-                    await self.bot.send(f"📡 {len(new)} kandidat ditemukan.")
-                    for mint in new[:15]:
-                        self._mark_processed(mint)
-                        await self._queue.put({
-                            "source": "CMD_SCAN",
-                            "mint": mint,
-                            "raw": "",
-                            "ts": datetime.now().isoformat(),
-                            "manual": False,
-                        })
+                    filtered = await self.fetcher.get_filtered_scan_mints(
+                        session,
+                        min_mc=5_000,
+                        max_mc=50_000,
+                        min_liq=1_000,
+                        min_vol1h=3_000,
+                    )
+
+                if not filtered:
+                    await self.bot.send(
+                        "✅ Tidak ada token yang memenuhi filter saat ini.\n"
+                        "<i>Coba lagi beberapa menit kemudian.</i>"
+                    )
+                    return
+
+                # Filter out already-processed (dedup)
+                new_candidates = [
+                    (chg5m, mint)
+                    for chg5m, mint in filtered
+                    if not self._is_duplicate(mint)
+                ]
+
+                if not new_candidates:
+                    await self.bot.send("✅ Semua kandidat sudah diproses (dedup).")
+                    return
+
+                await self.bot.send(
+                    f"📡 <b>{len(new_candidates)} token ditemukan</b> "
+                    f"(sudah difilter & diurutkan 5M↑)\n"
+                    f"<i>Memproses satu per satu...</i>"
+                )
+
+                for chg5m, mint in new_candidates[:15]:
+                    self._mark_processed(mint)
+                    await self._queue.put({
+                        "source": "CMD_SCAN",
+                        "mint":   mint,
+                        "raw":    f"Filtered scan (5m: {chg5m:+.1f}%)",
+                        "ts":     datetime.now().isoformat(),
+                        "manual": False,
+                    })
+
             except Exception as e:
+                log.error(f"Scan error: {e}", exc_info=True)
                 await self.bot.send(f"❌ Error scan: {str(e)[:100]}")
 
         elif command in ("/check", "/c"):
@@ -225,13 +267,12 @@ class PonyinAgent:
                 return
             await self.bot.send(f"🔍 Menganalisis...\n<code>{mint}</code>")
             self._processed.pop(mint, None)
-            # LANGSUNG PROSES, tidak lewat queue
             try:
                 await self.process_signal({
                     "source": "BOT_CHECK",
-                    "mint": mint,
-                    "raw": "Manual check",
-                    "ts": datetime.now().isoformat(),
+                    "mint":   mint,
+                    "raw":    "Manual check",
+                    "ts":     datetime.now().isoformat(),
                     "manual": True,
                 })
             except Exception as e:
@@ -243,13 +284,12 @@ class PonyinAgent:
             if len(ca) >= 32 and " " not in ca:
                 await self.bot.send(f"🔍 Menganalisis...\n<code>{ca}</code>")
                 self._processed.pop(ca, None)
-                # LANGSUNG PROSES, tidak lewat queue
                 try:
                     await self.process_signal({
                         "source": "BOT_DIRECT",
-                        "mint": ca,
-                        "raw": "Direct CA",
-                        "ts": datetime.now().isoformat(),
+                        "mint":   ca,
+                        "raw":    "Direct CA",
+                        "ts":     datetime.now().isoformat(),
                         "manual": True,
                     })
                 except Exception as e:
@@ -263,11 +303,12 @@ class PonyinAgent:
         try:
             from aiohttp import web
             app = web.Application()
-            app.router.add_get("/", lambda r: web.Response(text="PONYIN OK"))
+            app.router.add_get("/",       lambda r: web.Response(text="PONYIN OK"))
             app.router.add_get("/health", lambda r: web.Response(
                 text=json.dumps({
-                    "status": "ok",
-                    "signals": self._stats["total"],
+                    "status":    "ok",
+                    "version":   "7.0",
+                    "signals":   self._stats["total"],
                     "processed": len(self._processed),
                 }),
                 content_type="application/json"
@@ -283,36 +324,41 @@ class PonyinAgent:
         while True:
             await asyncio.sleep(3600)
             if self._stats["total"] > 0:
-                await self.bot.send(f"⏰ <b>Update 1 Jam</b>\n\n" + format_status(self._stats, len(self._processed)))
+                await self.bot.send(
+                    f"⏰ <b>Update 1 Jam</b>\n\n" +
+                    format_status(self._stats, len(self._processed))
+                )
 
     def _log_signal(self, token, decision, source):
         rec = {
-            "ts": datetime.now().isoformat(),
-            "source": source,
-            "mint": token.mint,
-            "name": token.name,
-            "symbol": token.symbol,
-            "verdict": token.verdict,
-            "flags": token.flags,
-            "mc": token.mc,
-            "liq": token.liq,
-            "vol1h": token.vol1h,
-            "price": token.price,
-            "top10_pct": token.top10_pct,
-            "risk_norm": token.risk_norm,
-            "lp_burn": token.lp_burn,
-            "position_type": token.position_type,
-            "wash_trading_flag": token.wash_trading_flag,
-            "cluster_risk": token.cluster_risk,
-            "dev_farm_risk": token.dev_farm_risk,
-            "smart_money_present": token.smart_money_present,
-            "timing_score": token.timing_score,
-            "holder_health": token.holder_health,
-            "sizing_note": token.sizing_note,
-            "plan": token.plan,
-            "decision": decision.action,
-            "conviction": decision.conviction,
-            "reason": decision.reason,
+            "ts":                 datetime.now().isoformat(),
+            "source":             source,
+            "mint":               token.mint,
+            "name":               token.name,
+            "symbol":             token.symbol,
+            "verdict":            token.verdict,
+            "flags":              token.flags,
+            "mc":                 token.mc,
+            "liq":                token.liq,
+            "vol1h":              token.vol1h,
+            "price":              token.price,
+            "chg5m":              token.chg5m,
+            "top10_pct":          token.top10_pct,
+            "risk_norm":          token.risk_norm,
+            "lp_burn":            token.lp_burn,
+            "gmgn_lp_burned":     token.gmgn_lp_burned,
+            "position_type":      token.position_type,
+            "wash_trading_flag":  token.wash_trading_flag,
+            "cluster_risk":       token.cluster_risk,
+            "dev_farm_risk":      token.dev_farm_risk,
+            "smart_money_present":token.smart_money_present,
+            "timing_score":       token.timing_score,
+            "holder_health":      token.holder_health,
+            "sizing_note":        token.sizing_note,
+            "plan":               token.plan,
+            "decision":           decision.action,
+            "conviction":         decision.conviction,
+            "reason":             decision.reason,
         }
         with open("agent_signals.json", "a", encoding="utf-8") as f:
             f.write(json.dumps(rec) + "\n")
@@ -326,8 +372,11 @@ class PonyinAgent:
             return []
 
     async def input_loop(self):
-        is_cloud = bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")
-                        or os.getenv("RAILWAY_SERVICE_ID"))
+        is_cloud = bool(
+            os.getenv("RENDER") or
+            os.getenv("RAILWAY_ENVIRONMENT") or
+            os.getenv("RAILWAY_SERVICE_ID")
+        )
         if is_cloud:
             while True:
                 await asyncio.sleep(3600)
@@ -354,9 +403,11 @@ class PonyinAgent:
                 print(format_status(self._stats, len(self._processed)))
             elif cmd == "log":
                 for r in self._load_log(10):
-                    v = r.get("verdict","?")
+                    v  = r.get("verdict", "?")
                     vc = G if "MASUK" in v else (Y if "WATCH" in v else D)
-                    print(f"  {vc}{r.get('symbol','?'):<10}{R} ${r.get('mc',0):>8,.0f} {v[:6]} {r.get('ts','')[:16]}")
+                    print(f"  {vc}{r.get('symbol','?'):<10}{R} "
+                          f"${r.get('mc',0):>8,.0f} {v[:6]} "
+                          f"{r.get('ts','')[:16]}")
             elif len(raw) >= 32 and " " not in raw:
                 await self._handle_bot_command("/check", raw)
             else:
@@ -364,12 +415,15 @@ class PonyinAgent:
 
     async def run(self):
         banner()
-        is_cloud = bool(os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT"))
-        print(f"{G}PONYIN AGENT v6.0 starting...{R}")
+        is_cloud = bool(
+            os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")
+        )
+        print(f"{G}PONYIN AGENT v7.0 starting...{R}")
         print(f"  Mode       : {'☁ Cloud' if is_cloud else '💻 Local'}")
         print(f"  Bot token  : {'✓ Set' if self.cfg.BOT_TOKEN else '✗ Tidak ada'}")
         print(f"  Signal ch  : {', '.join(self.cfg.SIGNAL_CHANNELS) or 'none'}")
-        print(f"  GMGN       : {'✓ Enabled' if True else '✗ Tidak ada'}")
+        print(f"  GMGN       : ✓ Enabled (concurrent fetch)")
+        print(f"  Scan filter: MC $5K-50K | Liq $1K | Vol1h $3K | 5M↑")
         print()
 
         tasks = [
@@ -378,11 +432,11 @@ class PonyinAgent:
             asyncio.create_task(self.hourly_summary(),  name="hourly"),
             asyncio.create_task(self.input_loop(),      name="input"),
         ]
-
         if self.cfg.BOT_TOKEN:
             tasks.append(asyncio.create_task(self.bot.run(), name="tg_bot"))
         if self.cfg.TG_API_ID and self.cfg.TG_API_HASH:
-            tasks.append(asyncio.create_task(self.tg_listener.run(), name="tg_listener"))
+            tasks.append(asyncio.create_task(
+                self.tg_listener.run(), name="tg_listener"))
 
         print(f"\n{G}{B}🚀 AGENT AKTIF{R}\n")
         try:

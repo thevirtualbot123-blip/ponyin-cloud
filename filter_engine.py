@@ -1,5 +1,10 @@
 """
-filter_engine.py — PONYIN AI AGENT v6.0 (GMGN + Helius + RugCheck)
+filter_engine.py — PONYIN AI AGENT v7.0
+Fixes:
+  - Token: add chg5m (5m price change) and gmgn_lp_burned flag
+  - _detect_dev_farm: don't flag HIGH when GMGN confirms LP is burned
+  - _apply_filters S4: recognise gmgn_lp_burned as valid LP burn proof
+  - to_dict: expose chg5m, source, price fields used by telegram_bot
 """
 import re, logging
 from datetime import datetime
@@ -27,6 +32,7 @@ class Token:
     vol1h: float = 0.0
     vol6h: float = 0.0
     vol24h: float = 0.0
+    chg5m: float = 0.0          # ← NEW: 5-minute price change
     chg1h: float = 0.0
     chg6h: float = 0.0
     chg24h: float = 0.0
@@ -64,6 +70,7 @@ class Token:
     rug_ratio: float = 0.0
     wash_trade_gmgn: bool = False
     fresh_wallet_rate: float = 0.0
+    gmgn_lp_burned: bool = False   # ← NEW: GMGN confirms LP is burned
     # Advanced
     wash_trading_flag: bool = False
     wash_trading_reason: str = ""
@@ -102,16 +109,28 @@ class Token:
 
     def to_dict(self) -> dict:
         return {
-            "mint": self.mint, "name": self.name, "symbol": self.symbol,
-            "price": self.price, "mc": self.mc, "liq": self.liq,
-            "vol1h": self.vol1h, "vol24h": self.vol24h,
-            "chg1h": self.chg1h, "chg24h": self.chg24h,
-            "top10_pct": self.top10_pct, "top10_source": self.top10_source,
-            "risk_norm": self.risk_norm, "risk_label": self.risk_label,
-            "lp_burn": self.lp_burn, "mint_auth": self.mint_auth,
-            "has_twitter": self.has_twitter, "has_telegram": self.has_telegram,
+            "mint": self.mint,
+            "name": self.name,
+            "symbol": self.symbol,
+            "price": self.price,
+            "mc": self.mc,
+            "liq": self.liq,
+            "vol1h": self.vol1h,
+            "vol24h": self.vol24h,
+            "chg5m": self.chg5m,      # ← NEW
+            "chg1h": self.chg1h,
+            "chg24h": self.chg24h,
+            "top10_pct": self.top10_pct,
+            "top10_source": self.top10_source,
+            "risk_norm": self.risk_norm,
+            "risk_label": self.risk_label,
+            "lp_burn": self.lp_burn,
+            "mint_auth": self.mint_auth,
+            "has_twitter": self.has_twitter,
+            "has_telegram": self.has_telegram,
             "has_website": self.has_website,
-            "flags": self.flags, "verdict": self.verdict,
+            "flags": self.flags,
+            "verdict": self.verdict,
             "position_type": self.position_type,
             "wash_trading_flag": self.wash_trading_flag,
             "wash_trading_reason": self.wash_trading_reason,
@@ -125,6 +144,7 @@ class Token:
             "holder_health": self.holder_health,
             "momentum_score": self.momentum_score,
             "holder_count_rc": self.holder_count_rc,
+            "holder_count_gmgn": self.holder_count_gmgn,   # ← NEW
             "bounce_potential": self.bounce_potential,
             "liq_trap_risk": self.liq_trap_risk,
             "is_bonding_curve": self.is_bonding_curve,
@@ -136,6 +156,13 @@ class Token:
             "dex": self.dex,
             "buys1h": self.buys1h,
             "sells1h": self.sells1h,
+            "dev_hold_pct": self.dev_hold_pct,              # ← NEW
+            "bundle_pct": self.bundle_pct,                  # ← NEW
+            "sniper_count": self.sniper_count,              # ← NEW
+            "kol_holders": self.kol_holders,                # ← NEW
+            "fresh_wallet_rate": self.fresh_wallet_rate,    # ← NEW
+            "rug_ratio": self.rug_ratio,                    # ← NEW
+            "gmgn_lp_burned": self.gmgn_lp_burned,         # ← NEW
         }
 
 @dataclass
@@ -155,7 +182,8 @@ class FilterEngine:
             t = self._classify(t)
             t = self._detect_bonding_curve(t)
             t = self._clean_top10(t)
-            # Analisis data GMGN jika tersedia
+            # Propagate gmgn_lp_burned from raw data
+            t = self._sync_gmgn_lp_burn(t)
             if hasattr(t, 'gmgn_data') and t.gmgn_data:
                 t = self._analyze_gmgn_holders(t, t.gmgn_data)
                 t = self._analyze_gmgn_security(t, t.gmgn_data)
@@ -178,6 +206,15 @@ class FilterEngine:
             t.sizing_note = "Error saat filter — cek manual"
         return t
 
+    def _sync_gmgn_lp_burn(self, t: Token) -> Token:
+        """
+        If GMGN already set lp_burn ≥ 95 (via burn_status/burn_ratio in data_fetcher),
+        ensure gmgn_lp_burned flag is True so downstream logic uses it.
+        """
+        if t.lp_burn >= 95:
+            t.gmgn_lp_burned = True
+        return t
+
     def _classify(self, t: Token) -> Token:
         if   t.mc < 100_000:   t.position_type = "LOWCAP"
         elif t.mc < 2_000_000: t.position_type = "MIDCAP"
@@ -185,10 +222,6 @@ class FilterEngine:
         return t
 
     def _detect_bonding_curve(self, t: Token) -> Token:
-        """
-        Bonding curve pump.fun: Liq = 0 atau sangat kecil, tapi belum punya pair address.
-        Jika sudah ada pair_addr (pernah graduate), maka bukan bonding curve.
-        """
         if t.pair_addr:
             t.is_bonding_curve = False
             return t
@@ -199,53 +232,54 @@ class FilterEngine:
         return t
 
     def _clean_top10(self, t: Token) -> Token:
-        # sederhana, tetap ada
         return t
 
-    # ── GMGN Analysis Methods ──────────────────────────────
+    # ── GMGN Analysis ──────────────────────────────────
     def _analyze_gmgn_holders(self, t: Token, data: dict) -> Token:
-        """Ambil Top10, holder count, dev supply, bundle % dari GMGN."""
-        # Top 10
-        top10 = data.get("top_10_holder_pct")
-        if top10 is not None and 0 < top10 <= 100:
-            t.top10_pct = round(float(top10), 1)
-            t.top10_source = "GMGN"
+        """Re-parse in case data_fetcher didn't unwrap nested key."""
+        from data_fetcher import DataFetcher
+        td = DataFetcher._unwrap_gmgn(data)
 
-        # Holder count
-        hc = data.get("holder_count")
-        if hc:
-            t.holder_count_gmgn = int(hc)
+        if t.top10_pct == 0:
+            for key in ("top_10_holder_pct", "top_10_holder_rate",
+                        "top10HolderPercent", "top10_holder_rate"):
+                raw = td.get(key)
+                if raw is not None:
+                    try:
+                        v = float(raw)
+                        if 0 < v <= 1.0: v *= 100
+                        if 0 < v <= 100:
+                            t.top10_pct = round(v, 1)
+                            t.top10_source = "GMGN"
+                    except (ValueError, TypeError):
+                        pass
+                    break
 
-        # Dev supply (penting: harus 0% sesuai Sambelikan)
-        dev = data.get("dev_hold_pct")
-        if dev is not None:
-            t.dev_hold_pct = float(dev)
-
-        # Bundle % (penting: harus < 40% sesuai Sambelikan)
-        bundle = data.get("bundle_pct") or data.get("bundler_trader_amount_rate")
-        if bundle is not None:
-            t.bundle_pct = float(bundle)
+        if not t.holder_count_gmgn:
+            for key in ("holder_count", "holder", "holderCount"):
+                hc = td.get(key)
+                if hc:
+                    t.holder_count_gmgn = int(hc)
+                    break
 
         return t
 
     def _analyze_gmgn_security(self, t: Token, data: dict) -> Token:
-        """Ambil data keamanan dari GMGN: sniper, honeypot, rug, smart money."""
-        t.sniper_count = int(data.get("sniper_count") or 0)
-        t.rat_trader_rate = float(data.get("rat_trader_amount_rate") or 0)
-        t.smart_money_count = int(data.get("smart_degen_count") or 0)
-        t.kol_holders = int(data.get("renowned_wallets") or 0)
-        t.is_honeypot = bool(data.get("is_honeypot"))
-        t.rug_ratio = float(data.get("rug_ratio") or 0)
-        t.wash_trade_gmgn = bool(data.get("wash_trade_flag"))
-        t.fresh_wallet_rate = float(data.get("fresh_wallet_rate") or 0)
-
-        # Smart money presence
+        from data_fetcher import DataFetcher
+        td = DataFetcher._unwrap_gmgn(data)
+        t.sniper_count   = int(td.get("sniper_count") or td.get("sniperCount") or 0)
+        t.rat_trader_rate= float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate") or 0)
+        t.smart_money_count = int(td.get("smart_degen_count") or td.get("smartDegenCount") or 0)
+        t.kol_holders    = int(td.get("renowned_wallets") or td.get("renowned_wallet_count") or 0)
+        t.is_honeypot    = bool(td.get("is_honeypot") or td.get("isHoneypot"))
+        t.rug_ratio      = float(td.get("rug_ratio") or td.get("dev_rug_ratio") or 0)
+        t.wash_trade_gmgn= bool(td.get("wash_trade_flag") or td.get("is_wash_trading"))
+        t.fresh_wallet_rate = float(td.get("fresh_wallet_rate") or td.get("freshWalletRate") or 0)
         if t.smart_money_count > 0:
             t.smart_money_present = True
-
         return t
 
-    # ── Wash Trading ────────────────────────────────────
+    # ── Wash Trading ─────────────────────────────────────
     def _detect_wash_trading(self, t: Token) -> Token:
         reasons = []
         total_txn = t.buys1h + t.sells1h
@@ -257,14 +291,16 @@ class FilterEngine:
                 reasons.append(f"Extreme vol/liq {ratio:.0f}x")
         if t.vol1h > 10_000 and total_txn == 0 and not t.is_bonding_curve and t.liq > 0:
             reasons.append(f"Vol besar ({t.vol1h:,.0f}) dgn 0 txn")
-        t.wash_trading_flag = len(reasons) > 0
+        t.wash_trading_flag   = len(reasons) > 0
         t.wash_trading_reason = " | ".join(reasons)
         return t
 
-    # ── Cluster ────────────────────────────────────────
+    # ── Cluster ──────────────────────────────────────────
     def _detect_cluster(self, t: Token) -> Token:
         if not t.top_holders:
-            t.cluster_risk = "UNKNOWN"; t.cluster_reason = "Data tidak tersedia"; t.cluster_score = 30
+            t.cluster_risk   = "UNKNOWN"
+            t.cluster_reason = "Data tidak tersedia"
+            t.cluster_score  = 30
             return t
         holders = t.top_holders[:20]
         pcts, insider_count, insider_pct = [], 0, 0.0
@@ -273,7 +309,8 @@ class FilterEngine:
             if 0 < pct <= 1.0: pct *= 100
             pcts.append(pct)
             if h.get("insider", False):
-                insider_count += 1; insider_pct += pct
+                insider_count += 1
+                insider_pct += pct
         score = 0
         reasons = []
         if   insider_count >= 6: score += 40; reasons.append(f"{insider_count} insiders")
@@ -295,28 +332,40 @@ class FilterEngine:
         t.cluster_reason = " | ".join(reasons) if reasons else f"Score {score}/100 normal"
         return t
 
-    # ── Dev Farm ────────────────────────────────────────
+    # ── Dev Farm ─────────────────────────────────────────
     def _detect_dev_farm(self, t: Token) -> Token:
         reasons, risk = [], "LOW"
-        if t.lp_burn == 0 and not t.is_bonding_curve:
-            if t.age_hours < 1.0 and t.vol1h > t.liq * 2:
-                reasons.append("LP 0% (fresh, high vol — tolerable)")
-            else:
-                reasons.append("LP 0%"); risk = "HIGH"
-        elif t.lp_burn < 50 and not t.is_bonding_curve:
-            reasons.append(f"LP {t.lp_burn:.0f}%")
-            if risk == "LOW": risk = "MEDIUM"
+
+        # LP check — skip if GMGN already confirmed it's burned
+        lp_is_safe = t.lp_burn >= 80 or t.is_bonding_curve or t.gmgn_lp_burned
+
+        if not lp_is_safe:
+            if t.lp_burn == 0:
+                # Fresh token with high volume may not have LP locked yet
+                if t.age_hours < 1.0 and t.vol1h > t.liq * 2 and t.liq > 0:
+                    reasons.append("LP 0% (fresh + high vol — tolerable)")
+                else:
+                    reasons.append("LP 0%")
+                    risk = "HIGH"
+            elif t.lp_burn < 50:
+                reasons.append(f"LP {t.lp_burn:.0f}%")
+                if risk == "LOW": risk = "MEDIUM"
+
         if t.mint_auth:
-            reasons.append("Mint auth"); risk = "HIGH"
+            reasons.append("Mint auth aktif")
+            risk = "HIGH"
+
         if t.risk_norm > 6:
             reasons.append(f"risk {t.risk_norm}/10")
             if risk == "LOW": risk = "MEDIUM"
-        kws = ["dev","creator","deployer","farm","bundle","sniper"]
+
+        kws = ["dev", "creator", "deployer", "farm", "bundle", "sniper"]
         for (lvl, nm, dc, vl) in t.rc_risks:
             if any(k in (nm + dc).lower() for k in kws):
                 reasons.append(f"[{lvl}] {nm}")
-                if lvl == "danger":               risk = "HIGH"
-                elif lvl == "warn" and risk=="LOW": risk = "MEDIUM"
+                if lvl == "danger":                risk = "HIGH"
+                elif lvl == "warn" and risk == "LOW": risk = "MEDIUM"
+
         t.dev_farm_risk   = risk
         t.dev_farm_reason = " | ".join(reasons) if reasons else "Clean"
         return t
@@ -331,28 +380,28 @@ class FilterEngine:
             holder_count = t.holder_count_rc
             source = "RugCheck(mature)"
         else:
-            t.fee_health_reason = f"Fresh/no reliable data (age={t.age_hours:.1f}h)"
+            t.fee_health_reason = f"Fresh/no data (age={t.age_hours:.1f}h)"
             return t
         reasons = []
         fh = "HEALTHY"
         if source == "GMGN":
             if t.mc > 100_000 and holder_count < 80:
-                reasons.append(f"MC ${t.mc:,.0f} tapi hanya {holder_count} holders")
+                reasons.append(f"MC ${t.mc:,.0f} tapi {holder_count} holders")
                 fh = "DANGER"
             elif t.mc > 50_000 and holder_count < 50:
-                reasons.append(f"MC ${t.mc:,.0f} dengan {holder_count} holders")
+                reasons.append(f"MC ${t.mc:,.0f} dgn {holder_count} holders")
                 fh = "LOW"
         else:
             if t.mc > 100_000 and holder_count < 50:
-                reasons.append(f"MC ${t.mc:,.0f} dgn {holder_count} holders (RugCheck)")
+                reasons.append(f"MC ${t.mc:,.0f} dgn {holder_count} (RC)")
                 fh = "WARNING"
-        t.fee_health = fh
+        t.fee_health        = fh
         t.fee_health_reason = " | ".join(reasons) if reasons else "OK"
         return t
 
     def _detect_smart_money(self, t: Token) -> Token:
         if not t.top_holders:
-            t.smart_money_present = False
+            # Still keep the GMGN smart money flag if set
             return t
         count, total = 0, 0.0
         for h in t.top_holders[:20]:
@@ -361,21 +410,22 @@ class FilterEngine:
             if not h.get("insider", False) and 1.0 < pct < 15.0:
                 count += 1
                 total += pct
-        t.smart_money_present = count >= 2
+        if count >= 2 or t.smart_money_count > 0:
+            t.smart_money_present = True
         t.smart_money_pct = round(total, 1)
         return t
 
     def _timing_score(self, t: Token) -> Token:
         hour = datetime.utcnow().hour
-        dow = datetime.utcnow().weekday()
-        wp = -15 if dow >= 5 else 0
+        dow  = datetime.utcnow().weekday()
+        wp   = -15 if dow >= 5 else 0
         if   20 <= hour or hour < 2:  base, r = 90, "US prime (20-02 UTC)"
         elif 13 <= hour < 20:          base, r = 75, "EU/US overlap (13-20 UTC)"
         elif 10 <= hour < 13:          base, r = 65, "EU peak (10-13 UTC)"
-        elif 6  <= hour < 10:          base, r = 55, "EU morning (06-10 UTC)"
-        elif 2  <= hour < 6:           base, r = 20, "Dead hours (02-06 UTC)"
+        elif  6 <= hour < 10:          base, r = 55, "EU morning (06-10 UTC)"
+        elif  2 <= hour < 6:           base, r = 20, "Dead hours (02-06 UTC)"
         else:                           base, r = 40, f"Hour {hour} UTC"
-        t.timing_score = max(0, min(100, base + wp))
+        t.timing_score  = max(0, min(100, base + wp))
         t.timing_reason = r + (" (wknd)" if dow >= 5 else "")
         return t
 
@@ -385,21 +435,31 @@ class FilterEngine:
         if   c1 > 100: score += 30
         elif c1 >  50: score += 20
         elif c1 >  20: score += 12
-        elif c1 >   5: score += 6
-        elif c1 >   0: score += 2
-        elif c1 > -10: score -= 3
+        elif c1 >   5: score +=  6
+        elif c1 >   0: score +=  2
+        elif c1 > -10: score -=  3
         elif c1 > -20: score -= 10
         else:           score -= 20
+
+        # Bonus for strong 5m trend
+        c5 = t.chg5m
+        if   c5 > 50: score += 10
+        elif c5 > 20: score += 6
+        elif c5 > 10: score += 3
+        elif c5 < -20: score -= 8
+
         bsr = t.buy_sell_ratio
         if   bsr > 0.75: score += 15
-        elif bsr > 0.60: score += 8
-        elif bsr > 0.45: score += 2
+        elif bsr > 0.60: score +=  8
+        elif bsr > 0.45: score +=  2
         elif bsr < 0.30: score -= 10
-        elif bsr < 0.40: score -= 5
+        elif bsr < 0.40: score -=  5
+
         if t.liq > 0 and t.vol1h > 0:
             vl = safe_div(t.vol1h, t.liq, 0)
             if   vl > 3.0: score += 10
-            elif vl > 1.0: score += 5
+            elif vl > 1.0: score +=  5
+
         t.momentum_score = max(0, min(100, score))
         return t
 
@@ -412,17 +472,18 @@ class FilterEngine:
 
     def _bounce_potential(self, t: Token) -> Token:
         if t.age_hours < 24:
-            t.bounce_potential = False; t.bounce_reason = ""
+            t.bounce_potential = False
+            t.bounce_reason    = ""
             return t
         signals, score = [], 0
         if t.chg24h < -30 and t.vol24h > 5000:
             signals.append(f"correction {t.chg24h:.0f}%"); score += 2
-        if t.liq > 5000: signals.append(f"liq ${t.liq:,.0f}"); score += 1
+        if t.liq > 5000:          signals.append(f"liq ${t.liq:,.0f}"); score += 1
         if t.has_twitter or t.has_telegram: signals.append("community"); score += 1
         if t.holder_count_rc > 100: signals.append(f"{t.holder_count_rc} holders"); score += 1
-        if t.smart_money_present: signals.append(f"SM {t.smart_money_pct:.1f}%"); score += 2
+        if t.smart_money_present:  signals.append(f"SM {t.smart_money_pct:.1f}%"); score += 2
         t.bounce_potential = score >= 3
-        t.bounce_reason = " | ".join(signals)
+        t.bounce_reason    = " | ".join(signals)
         return t
 
     def _holder_health(self, t: Token) -> Token:
@@ -430,39 +491,40 @@ class FilterEngine:
         if t.top10_pct > 0:
             if   t.top10_pct < 20: score += 25
             elif t.top10_pct < 35: score += 15
-            elif t.top10_pct < 50: score += 5
+            elif t.top10_pct < 50: score +=  5
             elif t.top10_pct < 65: score -= 10
             else:                   score -= 25
         cs = t.cluster_score
         if   cs < 20: score += 10
-        elif cs < 40: score += 0
+        elif cs < 40: score +=  0
         elif cs < 60: score -= 10
         elif cs < 80: score -= 20
         else:          score -= 30
-        if t.wash_trading_flag: score -= 20
-        if   t.lp_burn >= 95: score += 15
-        elif t.lp_burn >= 80: score += 8
+        if t.wash_trading_flag:                      score -= 20
+        if   t.lp_burn >= 95:                        score += 15
+        elif t.lp_burn >= 80:                        score +=  8
+        elif t.gmgn_lp_burned:                       score += 15   # ← trust GMGN burn
         elif t.lp_burn == 0 and not t.is_bonding_curve: score -= 10
-        elif 0 < t.lp_burn < 50: score -= 5
-        if t.smart_money_present: score += 8
-        if t.liq_trap_risk:       score -= 15
-        if   t.risk_norm < 2: score += 10
-        elif t.risk_norm < 4: score += 5
-        elif t.risk_norm > 6: score -= 15
-        hc = t.holder_count_gmgn if hasattr(t, 'holder_count_gmgn') else t.holder_count_rc
+        elif 0 < t.lp_burn < 50:                     score -=  5
+        if t.smart_money_present:  score +=  8
+        if t.liq_trap_risk:        score -= 15
+        if   t.risk_norm < 2:      score += 10
+        elif t.risk_norm < 4:      score +=  5
+        elif t.risk_norm > 6:      score -= 15
+        hc = t.holder_count_gmgn if t.holder_count_gmgn else t.holder_count_rc
         if hc > 0:
             if   hc > 500: score += 10
-            elif hc > 200: score += 5
-            elif hc > 100: score += 2
+            elif hc > 200: score +=  5
+            elif hc > 100: score +=  2
             elif hc < 50 and t.age_hours >= 6: score -= 10
         if t.fee_health == "DANGER": score -= 20
-        elif t.fee_health == "LOW":  score -= 8
+        elif t.fee_health == "LOW":  score -=  8
         t.holder_health = max(0, min(100, score))
         return t
 
     def _apply_filters(self, t: Token) -> Token:
-        cfg = self.cfg
-        flags = 0
+        cfg    = self.cfg
+        flags  = 0
         detail = []
 
         def bad(step, note, val):
@@ -485,40 +547,43 @@ class FilterEngine:
             bad("Wash Trading", t.wash_trading_reason[:80], "ARTIFICIAL")
 
         if t.liq_trap_risk:
-            bad("Liq Trap", f"Liq/MC {t.liq_mc_ratio:.1%} > 80% — rugpull setup", f"{t.liq_mc_ratio:.1%}")
+            bad("Liq Trap", f"Liq/MC {t.liq_mc_ratio:.1%} > 80% — rugpull setup",
+                f"{t.liq_mc_ratio:.1%}")
 
         if t.cluster_risk == "CRITICAL":
-            bad("Cluster CRITICAL", f"Score {t.cluster_score}/100 — {t.cluster_reason[:50]}", "CRITICAL ⛔")
+            bad("Cluster CRITICAL",
+                f"Score {t.cluster_score}/100 — {t.cluster_reason[:50]}", "CRITICAL ⛔")
 
         if t.fee_health == "DANGER":
             bad("Fee/Holder", t.fee_health_reason[:60], "DANGER")
         elif t.fee_health == "WARNING":
             info("Fee/Holder", t.fee_health_reason[:60], "WARNING")
 
-        # S1 Authority
+        # ── S1 Authority ─────────────────────────────────
         if t.mint_auth:
-            bad("S1 Mint Auth", "AKTIF — dev cetak token", "ACTIVE ⛔")
+            bad("S1 Mint Auth", "AKTIF — dev bisa cetak token", "ACTIVE ⛔")
         elif t.freeze_auth:
             bad("S1 Freeze Auth", "AKTIF — honeypot", "ACTIVE ⛔")
         else:
-            ok("S1 Authority", f"Revoked | LP {t.lp_burn:.0f}% burned", "Aman ✓")
+            lp_display = "100% (GMGN)" if t.gmgn_lp_burned else f"{t.lp_burn:.0f}%"
+            ok("S1 Authority", f"Revoked | LP {lp_display} burned", "Aman ✓")
 
-        # S2 MC & Liq — termasuk toleransi token mati
+        # ── S2 MC & Liq ──────────────────────────────────
         if t.mc <= 0:
             bad("S2 MC", "Data tidak tersedia", "N/A")
         elif t.mc < cfg.MIN_MC and not t.is_bonding_curve:
             if t.pair_addr and t.liq < 10:
-                info("S2 MC", f"MC ${t.mc:,.0f} kecil tapi token mati (liq ${t.liq:.2f})", "Dead")
+                info("S2 MC", f"MC ${t.mc:,.0f} kecil, token mati (liq ${t.liq:.2f})", "Dead")
             else:
                 bad("S2 MC", f"${t.mc:,.0f} < min ${cfg.MIN_MC:,.0f}", f"${t.mc:,.0f}")
         elif t.mc > cfg.MAX_MC:
             bad("S2 MC", f"${t.mc:,.0f} > max ${cfg.MAX_MC:,.0f}", f"${t.mc:,.0f}")
         elif t.is_bonding_curve:
-            info("S2 Liq (Bonding Curve)", f"MC ${t.mc:,.0f} | Liq ~$0", "⚠ Masih di pump.fun")
+            info("S2 Liq (Bonding)", f"MC ${t.mc:,.0f} | Liq ~$0", "⚠ Masih di pump.fun")
         elif t.liq < 10 and t.pair_addr:
-            info("S2 Liq (Dead)", f"Liq ${t.liq:.2f} — likely dead token", "Dead ⚰")
+            info("S2 Liq (Dead)", f"Liq ${t.liq:.2f} — likely dead", "Dead ⚰")
         elif t.liq <= 0 and t.vol1h <= 0 and t.age_hours > 1.0:
-            bad("S2 Liq (Idle)", f"MC ${t.mc:,.0f} Liq $0 Vol $0 — token idle/mati", "IDLE ⚠")
+            bad("S2 Liq (Idle)", f"MC ${t.mc:,.0f} Liq $0 Vol $0 — idle", "IDLE ⚠")
         elif t.liq < cfg.MIN_LIQ:
             bad("S2 Liq", f"${t.liq:,.0f} < min ${cfg.MIN_LIQ:,.0f}", f"${t.liq:,.0f}")
         else:
@@ -528,33 +593,38 @@ class FilterEngine:
             else:
                 ok("S2 MC & Liq", f"MC ${t.mc:,.0f} | Liq ${t.liq:,.0f} ({r:.1%})", "✓")
 
-        # S3 Top10
+        # ── S3 Top10 ─────────────────────────────────────
         if t.top10_pct == 0:
-            info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual")
+            info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual di GMGN")
         elif t.top10_pct > 55:
-            bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
+            bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE",
+                f"{t.top10_pct:.1f}%")
         elif t.top10_pct > 30:
             bad("S3 Top10", f"{t.top10_pct:.1f}% > 30%", f"{t.top10_pct:.1f}%")
         else:
             ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
 
-        # S4 Risk & LP — toleransi LP 0% untuk token fresh volume besar
+        # ── S4 Risk & LP ─────────────────────────────────
         rn = t.risk_norm
         if rn > 7:
             bad("S4 Risk", f"{rn}/10 [{t.risk_label.upper()}] BAHAYA", f"{rn}/10 ⛔")
         elif rn > cfg.MAX_RISK_NORM:
             bad("S4 Risk", f"{rn}/10 > max {cfg.MAX_RISK_NORM}", f"{rn}/10")
         elif t.lp_burn == 0 and not t.is_bonding_curve:
-            if t.vol1h > 10000 and t.age_hours < 0.5 and t.buys1h > 50:
-                info("S4 LP Burn", "0% (fresh, high activity — mungkin belum di-lock)", "⚡ Aktif")
+            # KEY FIX: check GMGN burn confirmation before flagging
+            if t.gmgn_lp_burned:
+                ok("S4 LP Burn", "100% (GMGN confirmed burned)", "Burned ✓")
+            elif t.vol1h > 10000 and t.age_hours < 0.5 and t.buys1h > 50:
+                info("S4 LP Burn", "0% (fresh, high activity — belum lock)", "⚡ Aktif")
             else:
                 bad("S4 LP Burn", "0% — dev bisa cabut liq kapanpun", "0% ⚠")
-        elif 0 < t.lp_burn < 80:
+        elif 0 < t.lp_burn < 80 and not t.gmgn_lp_burned:
             bad("S4 LP Burn", f"{t.lp_burn:.0f}% < 80%", f"{t.lp_burn:.0f}%")
         else:
-            ok("S4 Risk & LP", f"{rn}/10 [{t.risk_label}] | LP {t.lp_burn:.0f}%", "OK ✓")
+            lp_val = "100% (GMGN)" if t.gmgn_lp_burned else f"{t.lp_burn:.0f}%"
+            ok("S4 Risk & LP", f"{rn}/10 [{t.risk_label}] | LP {lp_val}", "OK ✓")
 
-        # S5 Cluster
+        # ── S5 Cluster ───────────────────────────────────
         cs, cr = t.cluster_score, t.cluster_risk
         if cr == "HIGH":
             bad("S5 Cluster", f"Score {cs}/100 — {t.cluster_reason[:50]}", f"HIGH ({cs})")
@@ -563,9 +633,9 @@ class FilterEngine:
         elif cr == "LOW":
             ok("S5 Cluster", f"Score {cs}/100", "Distribusi aman ✓")
         else:
-            info("S5 Cluster", "UNKNOWN", "Data kurang")
+            info("S5 Cluster", "UNKNOWN", "Data kurang — cek BubbleMaps")
 
-        # S6 Dev Farm
+        # ── S6 Dev Farm ──────────────────────────────────
         if t.dev_farm_risk == "HIGH":
             bad("S6 Dev Farm", t.dev_farm_reason[:55], "HIGH ⚠")
         elif t.dev_farm_risk == "MEDIUM":
@@ -573,56 +643,63 @@ class FilterEngine:
         else:
             ok("S6 Dev Farm", "LOW", "Clean ✓")
 
-        # ── S7 — GMGN Security ──────────────────────────────
-        if hasattr(t, 'is_honeypot') and t.is_honeypot:
+        # ── S7 GMGN Security ─────────────────────────────
+        if t.is_honeypot:
             bad("S7 Honeypot", "Terdeteksi honeypot oleh GMGN", "HONEYPOT ⛔")
 
-        if hasattr(t, 'rug_ratio') and t.rug_ratio > 0.5:
-            bad("S7 Rug Ratio", f"Rug ratio {t.rug_ratio:.2f} — high risk", f"{t.rug_ratio:.2f}")
+        if t.rug_ratio > 0.5:
+            bad("S7 Rug Ratio", f"Rug ratio {t.rug_ratio:.2f} — high risk",
+                f"{t.rug_ratio:.2f}")
 
-        if hasattr(t, 'wash_trade_gmgn') and t.wash_trade_gmgn:
-            bad("S7 Wash Trade", "GMGN mendeteksi wash trading", "WASH ⚠")
+        if t.wash_trade_gmgn:
+            bad("S7 Wash Trade (GMGN)", "GMGN mendeteksi wash trading", "WASH ⚠")
 
-        if hasattr(t, 'dev_hold_pct') and t.dev_hold_pct > 3:
-            bad("S7 Dev Supply", f"Dev hold {t.dev_hold_pct:.1f}% — belum lepas semua", f"{t.dev_hold_pct:.1f}%")
+        if t.dev_hold_pct > 3:
+            bad("S7 Dev Supply",
+                f"Dev hold {t.dev_hold_pct:.1f}% — belum lepas semua",
+                f"{t.dev_hold_pct:.1f}%")
 
-        if hasattr(t, 'bundle_pct') and t.bundle_pct > 40:
-            bad("S7 Bundle", f"Bundle {t.bundle_pct:.1f}% > 40%", f"{t.bundle_pct:.1f}%")
+        if t.bundle_pct > 40:
+            bad("S7 Bundle",
+                f"Bundle {t.bundle_pct:.1f}% > 40%", f"{t.bundle_pct:.1f}%")
 
-        if hasattr(t, 'sniper_count') and t.sniper_count > 10:
-            bad("S7 Sniper", f"{t.sniper_count} sniper wallets — potensi dump", f"{t.sniper_count}")
+        if t.sniper_count > 10:
+            bad("S7 Sniper",
+                f"{t.sniper_count} sniper wallets — potensi dump",
+                f"{t.sniper_count}")
 
-        if hasattr(t, 'rat_trader_rate') and t.rat_trader_rate > 0.3:
-            bad("S7 Insider", f"Rat trader rate {t.rat_trader_rate:.1%} — insider dominated", f"{t.rat_trader_rate:.1%}")
+        if t.rat_trader_rate > 0.3:
+            bad("S7 Insider",
+                f"Rat trader {t.rat_trader_rate:.1%} — insider dominated",
+                f"{t.rat_trader_rate:.1%}")
 
-        # Bonus: smart money & KOL
-        if hasattr(t, 'smart_money_count') and t.smart_money_count > 5:
+        # ── Bonus info (tidak nambah flag) ───────────────
+        if t.smart_money_count > 5:
             ok("Smart Money", f"{t.smart_money_count} smart degens", "Bullish ✓")
-
-        if hasattr(t, 'kol_holders') and t.kol_holders > 0:
+        if t.kol_holders > 0:
             ok("KOL Holders", f"{t.kol_holders} KOLs", "Atensi ✓")
 
-        # ── Bonus filters ────────────────────────────────────
-        soc = [s for s,b in [("TW",t.has_twitter),("TG",t.has_telegram),("Web",t.has_website)] if b]
+        soc = [s for s, b in [("TW", t.has_twitter), ("TG", t.has_telegram),
+                               ("Web", t.has_website)] if b]
         if soc: ok("Social", ", ".join(soc), "✓")
         else:   info("Social", "NONE", "Dev anonim")
 
         ms = t.momentum_score
-        if   ms >= 75: ok("Momentum",   f"{ms}/100", f"Bullish — {t.chg1h:+.1f}%")
+        if   ms >= 75: ok("Momentum",   f"{ms}/100", f"Bullish — {t.chg1h:+.1f}% (5m:{t.chg5m:+.1f}%)")
         elif ms >= 55: ok("Momentum",   f"{ms}/100", f"OK — {t.chg1h:+.1f}%")
-        elif ms >= 35: info("Momentum",  f"{ms}/100", f"Neutral — {t.chg1h:+.1f}%")
-        else:          info("Momentum",  f"{ms}/100", f"Bearish — {t.chg1h:+.1f}%")
+        elif ms >= 35: info("Momentum", f"{ms}/100", f"Neutral — {t.chg1h:+.1f}%")
+        else:          info("Momentum", f"{ms}/100", f"Bearish — {t.chg1h:+.1f}%")
 
         if t.smart_money_present:
             ok("Smart Money", f"{t.smart_money_pct:.1f}%", "GAKE hold ✓")
 
         total_tx = t.buys1h + t.sells1h
         if total_tx > 0:
-            bsr = t.buy_sell_ratio
+            bsr   = t.buy_sell_ratio
             label = f"{t.buys1h}B/{t.sells1h}S ({bsr:.0%})"
             if   bsr > 0.65: ok("Buy/Sell",   label, "Buy pressure ✓")
-            elif bsr < 0.35: info("Buy/Sell",  label, "Sell dominan ⚠")
-            else:             info("Buy/Sell",  label, "Balanced")
+            elif bsr < 0.35: info("Buy/Sell", label, "Sell dominan ⚠")
+            else:             info("Buy/Sell", label, "Balanced")
 
         tc = t.timing_score
         if   tc >= 70: ok("Timing",   f"{tc}/100", t.timing_reason)
@@ -632,12 +709,12 @@ class FilterEngine:
         if t.age_hours > 0:
             age = f"{t.age_hours*60:.0f}m" if t.age_hours < 1 else f"{t.age_hours:.1f}h"
             if   t.age_hours < 0.25: info("Age", age, "Very fresh <15m")
-            elif t.age_hours < 1:    ok("Age",   age, "Fresh <1h ✓")
-            elif t.age_hours <= 12:  ok("Age",   age, "Fresh ✓")
-            elif t.bounce_potential: info("Age",  age, f"Old + bounce")
-            else:                    info("Age",  age, "Old — cek thesis")
+            elif t.age_hours < 1:    ok("Age", age, "Fresh <1h ✓")
+            elif t.age_hours <= 12:  ok("Age", age, "Fresh ✓")
+            elif t.bounce_potential: info("Age", age, "Old + bounce")
+            else:                    info("Age", age, "Old — cek thesis")
 
-        hc = t.holder_count_gmgn if hasattr(t, 'holder_count_gmgn') else t.holder_count_rc
+        hc = t.holder_count_gmgn if t.holder_count_gmgn else t.holder_count_rc
         if hc > 0:
             if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
             elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")
@@ -654,12 +731,19 @@ class FilterEngine:
         elif hh >= 40: info("Hldr Health",  f"{hh}/100", "Moderate")
         else:           info("Hldr Health", f"{hh}/100", "Concern")
 
-        t.flags = flags
+        # GMGN extra metrics
+        if t.fresh_wallet_rate > 0.3:
+            info("Fresh Wallets", f"{t.fresh_wallet_rate:.0%}", "⚠ Banyak fresh wallet")
+        if t.rug_ratio > 0 and t.rug_ratio <= 0.5:
+            info("Rug History", f"{t.rug_ratio:.0%}", "Dev pernah rug sebelumnya")
+        if t.bundle_pct > 0 and t.bundle_pct <= 40:
+            info("Bundle", f"{t.bundle_pct:.1f}%", "Di bawah threshold ✓")
+
+        t.flags         = flags
         t.filter_details = detail
         if   flags == 0: t.verdict = "MASUK"
         elif flags == 1: t.verdict = "WATCH"
         else:             t.verdict = "SKIP"
-
         return t
 
     def _build_plan(self, t: Token) -> Token:
@@ -686,14 +770,18 @@ class FilterEngine:
         elif t.cluster_risk == "HIGH":
             max_p *= 0.6
         t.plan = {
-            "entry": p,
-            "tp1":   p * (1 + tp1/100),
-            "tp2":   p * (1 + tp2/100),
-            "sl":    p * (1 - sl/100),
-            "dca1":  p * (1 - dca1/100),
-            "dca2":  p * (1 - dca2/100),
-            "tp1_pct": tp1, "tp2_pct": tp2, "sl_pct": sl,
-            "dca1_pct": dca1, "dca2_pct": dca2, "max_port": max_p,
+            "entry":    p,
+            "tp1":      p * (1 + tp1/100),
+            "tp2":      p * (1 + tp2/100),
+            "sl":       p * (1 - sl/100),
+            "dca1":     p * (1 - dca1/100),
+            "dca2":     p * (1 - dca2/100),
+            "tp1_pct":  tp1,
+            "tp2_pct":  tp2,
+            "sl_pct":   sl,
+            "dca1_pct": dca1,
+            "dca2_pct": dca2,
+            "max_port": max_p,
         }
         t.sizing_note = f"{t.position_type}: max {max_p*100:.0f}% port"
         return t
