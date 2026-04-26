@@ -1,11 +1,8 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.2
-Fixes:
-  - GMGN: use tls_client (bypass Cloudflare) → full data tanpa API key
-  - Endpoint: /defi/quotation/v1/tokens/sol/{mint} (plural, public)
-  - gmgn_new_tokens: also use tls_client for discovery
-  - Helius DAS fallback for real holder count
-  - Solscan fallback (holder count) removed — no longer needed
+data_fetcher.py — PONYIN AI AGENT v7.3
+- GMGN dual endpoint (plural/singular) + response debug log
+- Helius DAS holder count with success/error log
+- Solscan holder count (public, accurate) as last resort
 """
 import asyncio, aiohttp, logging, re, random
 from datetime import datetime
@@ -63,18 +60,13 @@ class DataFetcher:
             return []
         return data if isinstance(data, list) else (data.get("pairs") or [])
 
-    # ── GMGN API (tls_client bypass Cloudflare) ─────────
-    async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
-        """
-        Fetch token info from GMGN public endpoint via tls_client.
-        NO API KEY REQUIRED. Returns FULL data.
-        """
+    # ── GMGN API (tls_client) ───────────────────────────
+    async def _gmgn_fetch(self, url: str, mint: str) -> Optional[dict]:
+        """Low-level fetch to GMGN via tls_client, with detailed logging."""
         import tls_client
         from fake_useragent import UserAgent
 
         ua = UserAgent()
-        url = f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}"
-
         headers = {
             "Host": "gmgn.ai",
             "Accept": "application/json, text/plain, */*",
@@ -92,21 +84,51 @@ class DataFetcher:
             response = await asyncio.get_event_loop().run_in_executor(
                 None, lambda: client.get(url, headers=headers, timeout=15)
             )
-            if response.status_code == 200:
+            status = response.status_code
+            if status == 200:
                 data = response.json()
-                if isinstance(data, dict) and data.get("code") == 0 and data.get("data"):
-                    log.debug(f"GMGN tls OK: {mint[:12]}")
+                # Debug: log raw response snippet if not successful
+                code = data.get("code", -1)
+                if code == 0 and data.get("data"):
+                    log.info(f"GMGN OK ({mint[:12]}): {url.split('/')[-1][:30]}")
                     return data["data"]
-                log.debug(f"GMGN tls code={data.get('code')} msg={data.get('msg','?')} for {mint[:12]}")
+                else:
+                    # Log response structure to debug
+                    sample = str(data)[:300]
+                    log.info(
+                        f"GMGN no data for {mint[:12]}: code={code} "
+                        f"msg={data.get('msg','?')} | keys={list(data.keys())[:5]} "
+                        f"| sample={sample}"
+                    )
             else:
-                log.debug(f"GMGN tls HTTP {response.status_code} for {mint[:12]}")
+                log.info(f"GMGN HTTP {status} for {mint[:12]}")
         except Exception as e:
-            log.debug(f"GMGN tls error {mint[:12]}: {e}")
+            log.info(f"GMGN tls exception {mint[:12]}: {e}")
 
         return None
 
+    async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
+        """
+        Try both plural and singular endpoints.
+        Most wrappers use plural, but some tokens only respond on singular.
+        """
+        # Plural first (used by gmgnai-wrapper)
+        data = await self._gmgn_fetch(
+            f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
+            mint
+        )
+        if data:
+            return data
+
+        # Fallback: singular endpoint (some private APIs use this)
+        data = await self._gmgn_fetch(
+            f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
+            mint
+        )
+        return data
+
     async def gmgn_new_tokens(self, session) -> List[str]:
-        """Fetch trending/new tokens from GMGN (public) via tls_client."""
+        """Fetch trending tokens from GMGN (public) via tls_client."""
         import tls_client
         from fake_useragent import UserAgent
 
@@ -327,6 +349,7 @@ class DataFetcher:
         return None
 
     async def helius_get_token_holder_count(self, session, mint: str) -> int:
+        """Returns real holder count from Helius DAS. Logs result."""
         if not self.cfg.HELIUS_API_KEY:
             return 0
         payload = {
@@ -349,10 +372,12 @@ class DataFetcher:
                     result = data.get("result")
                     if isinstance(result, dict):
                         total = result.get("total", 0)
-                        if total:
-                            return int(total)
+                        log.info(f"Helius DAS holder count for {mint[:12]}: {total}")
+                        return int(total)
+                else:
+                    log.info(f"Helius DAS HTTP {r.status} for {mint[:12]}")
         except Exception as e:
-            log.debug(f"Helius holder count error {mint[:12]}: {e}")
+            log.info(f"Helius DAS exception {mint[:12]}: {e}")
         return 0
 
     def _apply_helius_holders(self, t: Token, holders_data: dict, supply_data: dict) -> Token:
@@ -368,6 +393,22 @@ class DataFetcher:
             t.top10_pct = round((total_ui / ui_supply) * 100, 1)
             t.top10_source = "Helius"
         return t
+
+    # ── Solscan holder count (accurate, public) ──────────
+    async def solscan_token_meta(self, session, mint: str) -> Optional[int]:
+        """Fallback holder count from Solscan public API."""
+        url = f"https://public-api.solscan.io/token/meta?tokenAddress={mint}"
+        try:
+            async with session.get(url, timeout=10) as r:
+                if r.status == 200:
+                    data = await r.json(content_type=None)
+                    if isinstance(data, dict) and "holder" in data:
+                        hc = int(data["holder"])
+                        log.info(f"Solscan holder count for {mint[:12]}: {hc}")
+                        return hc
+        except Exception as e:
+            log.debug(f"Solscan meta error {mint[:12]}: {e}")
+        return None
 
     # ── RugCheck ─────────────────────────────────────────
     async def rugcheck_full(self, session, mint: str) -> Optional[dict]:
@@ -509,11 +550,16 @@ class DataFetcher:
                 if not isinstance(helius_supply, Exception) and helius_supply:
                     token = self._apply_helius_holders(token, helius_holders, helius_supply)
 
-        # Helius DAS fallback for real holder count (only if GMGN didn't provide)
-        if token.holder_count_gmgn == 0 and self.cfg.HELIUS_API_KEY:
-            hc = await self.helius_get_token_holder_count(session, mint)
-            if hc > 0:
-                token.holder_count_gmgn = hc
+        # Holder count: GMGN → Helius DAS → Solscan
+        if token.holder_count_gmgn == 0:
+            if self.cfg.HELIUS_API_KEY:
+                hc = await self.helius_get_token_holder_count(session, mint)
+                if hc > 0:
+                    token.holder_count_gmgn = hc
+            if token.holder_count_gmgn == 0:
+                hc = await self.solscan_token_meta(session, mint)
+                if hc and hc > 0:
+                    token.holder_count_gmgn = hc
 
         return token
 
