@@ -1,16 +1,17 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.4
-Fixes:
-  - GMGN_API_KEY now actually sent in x-route-key header
-  - RugCheck topHolders no longer misused as total holder count
-  - Helius DAS getTokenAccounts fixed to read result.total
-  - Aggressive debug logging + cross-check validation
-  - Robust GMGN key parsing (top10_pct, holder_count, etc.)
+data_fetcher.py — PONYIN AI AGENT v7.5 FINAL
+Architecture:
+  - Primary: DexScreener (price, mc, liq, vol, socials)
+  - Primary: Helius DAS (holder count, top10% REAL from all accounts)
+  - Secondary: RugCheck (security, LP burn, mint/freeze, risks)
+  - Bonus: GMGN (smart money, bundle, sniper) — optional, fragile
+  - Fallback: Heuristic analysis for bundle/smart money/sniper patterns
 """
 import asyncio, aiohttp, logging, re, random
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional, List, Tuple
+from collections import defaultdict
 from filter_engine import Token
 
 log = logging.getLogger("PONYIN.Fetcher")
@@ -63,13 +64,9 @@ class DataFetcher:
             return []
         return data if isinstance(data, list) else (data.get("pairs") or [])
 
-    # ── GMGN API (FIXED: API Key sent in x-route-key header) ─
+    # ── GMGN API (Optional — fragile, often fails) ──────
     async def _gmgn_fetch(self, url: str, mint: str, method: str = "GET",
                           payload: dict = None) -> Optional[dict]:
-        """
-        Low-level fetch to GMGN via tls_client.
-        Tries multiple auth methods: x-route-key header, Authorization Bearer, query param.
-        """
         import tls_client
         from fake_useragent import UserAgent
 
@@ -82,7 +79,7 @@ class DataFetcher:
         )
         client.timeout_seconds = 60
 
-        base_headers = {
+        headers = {
             'Host': 'gmgn.ai',
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -93,111 +90,44 @@ class DataFetcher:
             'user-agent': ua.random,
         }
 
-        # Try auth methods in order
-        auth_methods = []
         if self.cfg.GMGN_API_KEY:
-            auth_methods = [
-                ("header-x-route", {"x-route-key": self.cfg.GMGN_API_KEY}),
-                ("header-auth", {"Authorization": f"Bearer {self.cfg.GMGN_API_KEY}"}),
-                ("header-apikey", {"X-API-Key": self.cfg.GMGN_API_KEY}),
-            ]
-        else:
-            log.warning(f"GMGN_API_KEY not set — using public endpoint")
+            headers['x-route-key'] = self.cfg.GMGN_API_KEY
 
-        last_error = None
-        for auth_name, auth_headers in auth_methods or [("none", {})]:
-            headers = {**base_headers, **auth_headers}
-            try:
-                if method == "POST":
-                    response = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: client.post(url, json=payload, headers=headers)
-                    )
-                else:
-                    response = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: client.get(url, headers=headers)
-                    )
-
-                status = response.status_code
-                body = response.text[:500]  # Capture first 500 chars
-
-                log.info(f"GMGN [{auth_name}] {url[:50]} | Status: {status}")
-
-                if status == 200:
-                    data = response.json()
-                    code = data.get("code", -1)
-                    if code == 0 and data.get("data"):
-                        log.info(f"GMGN OK via {auth_name} ({mint[:12]})")
-                        # Save debug
-                        try:
-                            import json
-                            with open(f"debug_gmgn_{mint[:8]}.json", "w") as f:
-                                json.dump(data, f, indent=2, default=str)
-                        except Exception:
-                            pass
-                        return data["data"]
-                    else:
-                        log.warning(f"GMGN [{auth_name}] code={code} msg={data.get('msg','?')}")
-                elif status == 401:
-                    log.warning(f"GMGN [{auth_name}] 401 Unauthorized — wrong key format")
-                elif status == 403:
-                    log.warning(f"GMGN [{auth_name}] 403 Forbidden — key invalid or expired")
-                elif status == 429:
-                    log.error(f"GMGN [{auth_name}] 429 Rate Limited")
-                else:
-                    log.warning(f"GMGN [{auth_name}] HTTP {status}: {body[:100]}")
-
-            except Exception as e:
-                last_error = str(e)
-                log.debug(f"GMGN [{auth_name}] exception: {e}")
-
-        # If all header methods failed, try query param as last resort
-        if self.cfg.GMGN_API_KEY and "?" not in url:
-            qp_url = f"{url}?x-route-key={self.cfg.GMGN_API_KEY}"
-            log.info(f"GMGN trying query param: {qp_url[:60]}")
-            try:
+        try:
+            if method == "POST":
                 response = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: client.get(qp_url, headers=base_headers)
+                    None, lambda: client.post(url, json=payload, headers=headers)
                 )
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("code") == 0 and data.get("data"):
-                        return data["data"]
-            except Exception as e:
-                log.debug(f"GMGN query param failed: {e}")
+            else:
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: client.get(url, headers=headers)
+                )
 
-        if last_error:
-            log.error(f"GMGN all methods failed for {mint[:12]}: {last_error}")
+            status = response.status_code
+            if status == 200:
+                data = response.json()
+                code = data.get("code", -1)
+                if code == 0 and data.get("data"):
+                    return data["data"]
+            elif status == 429:
+                log.warning(f"GMGN rate limited for {mint[:12]}")
+            else:
+                log.debug(f"GMGN HTTP {status} for {mint[:12]}")
+        except Exception as e:
+            log.debug(f"GMGN exception {mint[:12]}: {e}")
+
         return None
 
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
-        """
-        Try multiple GMGN endpoints.
-        """
         endpoints = [
-            # 1) POST multi-window (most reliable for authenticated users)
-            {
-                "url": "https://gmgn.ai/api/v1/mutil_window_token_info",
-                "method": "POST",
-                "payload": {"chain": "sol", "addresses": [mint]}
-            },
-            # 2) GET token detail (singular)
-            {
-                "url": f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
-                "method": "GET",
-                "payload": None
-            },
-            # 3) GET tokens detail (plural)
-            {
-                "url": f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
-                "method": "GET",
-                "payload": None
-            },
+            {"url": "https://gmgn.ai/api/v1/mutil_window_token_info", "method": "POST",
+             "payload": {"chain": "sol", "addresses": [mint]}},
+            {"url": f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}", "method": "GET"},
+            {"url": f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}", "method": "GET"},
         ]
-
         for ep in endpoints:
-            data = await self._gmgn_fetch(ep["url"], mint, ep["method"], ep["payload"])
+            data = await self._gmgn_fetch(ep["url"], mint, ep["method"], ep.get("payload"))
             if data:
-                # Normalize response
                 if isinstance(data, list) and len(data) > 0:
                     return data[0]
                 if isinstance(data, dict) and "tokens" in data:
@@ -205,11 +135,9 @@ class DataFetcher:
                     if isinstance(tokens, list) and len(tokens) > 0:
                         return tokens[0]
                 return data
-
         return None
 
     async def gmgn_new_tokens(self, session) -> List[str]:
-        """Fetch trending tokens from GMGN (public) via tls_client."""
         import tls_client
         from fake_useragent import UserAgent
 
@@ -267,161 +195,104 @@ class DataFetcher:
             log.info(f"GMGN discovery: {len(unique)} tokens")
         return unique[:60]
 
-    @staticmethod
-    def _unwrap_gmgn(data: dict) -> dict:
-        if not data:
-            return {}
-        if "data" in data and isinstance(data["data"], dict):
-            inner = data["data"]
-            if "token" in inner and isinstance(inner["token"], dict):
-                return inner["token"]
-            return inner
-        if "token" in data and isinstance(data["token"], dict):
-            return data["token"]
-        return data
+    # ── Helius DAS — GOLD STANDARD for on-chain data ────
+    async def helius_get_all_holders(self, session, mint: str) -> List[dict]:
+        """
+        Fetch ALL token holders via Helius DAS with pagination.
+        Returns deduped owner list for accurate top10% calculation.
+        """
+        if not self.cfg.HELIUS_API_KEY:
+            return []
 
-    @staticmethod
-    def _gmgn_float(data: dict, *keys, default: float = 0.0) -> float:
-        for k in keys:
-            v = data.get(k)
-            if v is not None:
-                try:
-                    return float(v)
-                except (ValueError, TypeError):
-                    continue
-        return default
+        all_accounts = []
+        page = 1
 
-    @staticmethod
-    def _gmgn_int(data: dict, *keys, default: int = 0) -> int:
-        for k in keys:
-            v = data.get(k)
-            if v is not None:
-                try:
-                    return int(v)
-                except (ValueError, TypeError):
-                    continue
-        return default
+        while True:
+            payload = {
+                "jsonrpc": "2.0", "id": 1,
+                "method": "getTokenAccounts",
+                "params": {"mint": mint, "limit": 1000, "page": page},
+            }
+            try:
+                async with session.post(
+                    self.cfg.HELIUS_RPC_URL, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as r:
+                    if r.status != 200:
+                        break
+                    data = await r.json()
+                    result = data.get("result", {})
+                    accounts = result.get("token_accounts", [])
+                    if not accounts:
+                        break
 
-    def _apply_gmgn_data(self, t: Token, data: dict) -> Token:
-        t.gmgn_data = data
-        td = self._unwrap_gmgn(data)
+                    for acc in accounts:
+                        all_accounts.append({
+                            "owner": acc.get("owner", ""),
+                            "amount": acc.get("amount", "0"),
+                            "uiAmount": float(acc.get("uiAmount", 0) or 0),
+                        })
 
-        # DEBUG: log semua key yang tersedia
-        log.debug(f"GMGN keys for {t.mint[:12]}: {list(td.keys())}")
-
-        # ── Top 10 holders ────────────────────────────────
-        for key in ("top_10_holder_pct", "top_10_holder_rate",
-                    "top10HolderPercent", "top10_holder_rate",
-                    "topHolderRate", "top_10_holder_percent",
-                    "top10_pct", "top10Percent", "top_holder_pct"):
-            raw = td.get(key)
-            if raw is not None:
-                try:
-                    v = float(raw)
-                    if 0 < v <= 1.0:
-                        v *= 100
-                    if 0 < v <= 100:
-                        t.top10_pct = round(v, 1)
-                        t.top10_source = "GMGN"
-                        log.info(f"GMGN top10 for {t.mint[:12]}: {t.top10_pct}% (key={key})")
-                except (ValueError, TypeError):
-                    pass
+                    if len(accounts) < 1000:
+                        break
+                    page += 1
+                    if page > 10:
+                        log.warning(f"Helius pagination limit for {mint[:12]}")
+                        break
+            except Exception as e:
+                log.warning(f"Helius page {page} error {mint[:12]}: {e}")
                 break
 
-        # ── Holder count ──────────────────────────────────
-        for key in ("holder_count", "holder", "holderCount",
-                    "holders", "holder_num", "total_holders", "totalHolders"):
-            raw = td.get(key)
-            if raw is not None:
-                try:
-                    t.holder_count_gmgn = int(raw)
-                    log.info(f"GMGN holders for {t.mint[:12]}: {t.holder_count_gmgn} (key={key})")
-                    break
-                except (ValueError, TypeError):
-                    pass
+        log.info(f"Helius fetched {len(all_accounts)} raw accounts for {mint[:12]}")
+        return all_accounts
 
-        # ── Dev supply ────────────────────────────────────
-        dev = self._gmgn_float(td,
-            "dev_hold_pct", "dev_holding_pct", "devHoldingPercent",
-            "creator_hold_pct", "creator_holding")
-        t.dev_hold_pct = dev
+    def _calculate_top10_from_helius(self, t: Token, accounts: List[dict], supply_data: dict) -> Token:
+        """
+        Calculate REAL top10% from all Helius DAS accounts with owner dedup.
+        """
+        if not accounts:
+            return t
 
-        # ── LP Burn ───────────────────────────────────────
-        burn_status = str(td.get("burn_status") or "").lower()
-        burn_ratio_raw = (td.get("burn_ratio") or td.get("lp_burn_ratio") or
-                          td.get("lpBurnRatio") or "0")
-        try:
-            br = float(burn_ratio_raw)
-            if br >= 0.95:
-                t.lp_burn = 100.0
-            elif br > 0:
-                t.lp_burn = max(t.lp_burn, round(br * 100, 1))
-        except (ValueError, TypeError):
-            pass
-        if burn_status in ("burn", "burned", "true", "yes"):
-            t.lp_burn = 100.0
+        supply_info = supply_data.get("value") if supply_data else {}
+        total_supply = float(supply_info.get("uiAmount", 0))
 
-        # ── Bundle % ──────────────────────────────────────
-        bundle = self._gmgn_float(td,
-            "bundle_pct", "bundler_pct", "bundlerPercent",
-            "bundler_trader_amount_rate", "bundleRate")
-        if bundle:
-            t.bundle_pct = bundle
+        if total_supply <= 0:
+            log.warning(f"Helius supply zero for {t.mint[:12]}")
+            return t
 
-        # ── Sniper ────────────────────────────────────────
-        t.sniper_count = self._gmgn_int(td,
-            "sniper_count", "sniperCount", "sniper_num")
+        # Dedup by owner (handle multiple ATAs)
+        owner_totals = defaultdict(float)
+        for acc in accounts:
+            owner = acc.get("owner", "")
+            if not owner:
+                continue
+            # Skip known system/contract addresses
+            if owner in ("11111111111111111111111111111111",
+                         "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                         "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"):
+                continue
+            owner_totals[owner] += acc.get("uiAmount", 0)
 
-        # ── Smart money / KOL ─────────────────────────────
-        smart = self._gmgn_int(td,
-            "smart_degen_count", "smartDegenCount", "smart_money_count",
-            "smart_holder_count")
-        t.smart_money_count = smart
-        if smart > 0:
-            t.smart_money_present = True
+        # Sort by total descending
+        sorted_owners = sorted(owner_totals.items(), key=lambda x: x[1], reverse=True)
 
-        kol = self._gmgn_int(td,
-            "renowned_wallets", "renowned_wallet_count",
-            "renownedWalletCount", "kol_count")
-        t.kol_holders = kol
+        # Calculate top10%
+        top10_sum = sum(amount for _, amount in sorted_owners[:10])
+        top10_pct = (top10_sum / total_supply) * 100
 
-        # ── Security ──────────────────────────────────────
-        t.is_honeypot = bool(
-            td.get("is_honeypot") or td.get("isHoneypot") or
-            td.get("honeypot") or False
+        t.top10_pct = round(top10_pct, 1)
+        t.top10_source = f"Helius({len(sorted_owners)} holders)"
+
+        # Update holder count (real deduped count)
+        t.holder_count_gmgn = len(sorted_owners)
+
+        log.info(
+            f"Helius TOP10 {t.mint[:12]}: {t.top10_pct}% "
+            f"from {len(sorted_owners)} unique holders "
+            f"(top10_sum={top10_sum:.2f}, supply={total_supply:.2f})"
         )
-        t.rug_ratio = self._gmgn_float(td,
-            "rug_ratio", "dev_rug_ratio", "rugRatio", "rugged_ratio")
-
-        t.wash_trade_gmgn = bool(
-            td.get("wash_trade_flag") or td.get("is_wash_trading") or
-            td.get("washTrading") or td.get("wash_trading") or False
-        )
-        t.fresh_wallet_rate = self._gmgn_float(td,
-            "fresh_wallet_rate", "freshWalletRate", "fresh_rate")
-        t.rat_trader_rate = self._gmgn_float(td,
-            "rat_trader_amount_rate", "ratTraderRate", "rat_trader_rate")
 
         return t
-
-    # ── Helius fallback ─────────────────────────────────
-    async def helius_get_largest_holders(self, session, mint: str) -> Optional[dict]:
-        if not self.cfg.HELIUS_API_KEY:
-            return None
-        payload = {
-            "jsonrpc": "2.0", "id": 1,
-            "method": "getTokenLargestAccounts",
-            "params": [mint, {"commitment": "confirmed"}],
-        }
-        try:
-            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
-                                    timeout=aiohttp.ClientTimeout(total=12)) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    return data.get("result")
-        except Exception as e:
-            log.debug(f"Helius largest holders error: {e}")
-        return None
 
     async def helius_get_token_supply(self, session, mint: str) -> Optional[dict]:
         if not self.cfg.HELIUS_API_KEY:
@@ -440,56 +311,6 @@ class DataFetcher:
         except Exception as e:
             log.debug(f"Helius supply error: {e}")
         return None
-
-    async def helius_get_token_holder_count(self, session, mint: str) -> int:
-        if not self.cfg.HELIUS_API_KEY:
-            return 0
-        # FIX: Helius DAS getTokenAccounts — ambil total dari field "total"
-        payload = {
-            "jsonrpc": "2.0", "id": 1,
-            "method": "getTokenAccounts",
-            "params": {
-                "mint": mint,
-                "limit": 1000,
-                "page": 1,
-            },
-        }
-        try:
-            async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
-                                    timeout=aiohttp.ClientTimeout(total=15)) as r:
-                if r.status == 200:
-                    data = await r.json()
-                    result = data.get("result", {})
-                    total = result.get("total", 0)
-                    if total:
-                        log.info(f"Helius DAS holder count for {mint[:12]}: {total}")
-                        return int(total)
-                    # Fallback: count unique owners manually
-                    accounts = result.get("token_accounts", [])
-                    if accounts:
-                        owners = set()
-                        for acc in accounts:
-                            owner = acc.get("owner") or acc.get("account") or ""
-                            if owner:
-                                owners.add(owner)
-                        return len(owners)
-        except Exception as e:
-            log.info(f"Helius DAS exception {mint[:12]}: {e}")
-        return 0
-
-    def _apply_helius_holders(self, t: Token, holders_data: dict, supply_data: dict) -> Token:
-        if not holders_data or "value" not in holders_data:
-            return t
-        holder_list = holders_data["value"]
-        supply_info = supply_data.get("value") if supply_data else {}
-        ui_supply = float(supply_info.get("uiAmount", 0))
-        if ui_supply <= 0:
-            return t
-        total_ui = sum(float(h.get("uiAmount", 0)) for h in holder_list[:10])
-        if total_ui > 0:
-            t.top10_pct = round((total_ui / ui_supply) * 100, 1)
-            t.top10_source = "Helius"
-        return t
 
     # ── RugCheck ─────────────────────────────────────────
     async def rugcheck_full(self, session, mint: str) -> Optional[dict]:
@@ -580,61 +401,40 @@ class DataFetcher:
         gmgn_raw = None if isinstance(gmgn_raw, Exception) else gmgn_raw
         rc_raw = None if isinstance(rc_raw, Exception) else rc_raw
 
-        # Log sumber data
         log.info(
-            f"Sources for {mint[:12]}: "
+            f"Sources {mint[:12]}: "
             f"DEX={'OK' if dex_raw else 'FAIL'} | "
             f"GMGN={'OK' if gmgn_raw else 'FAIL'} | "
-            f"RugCheck={'OK' if rc_raw else 'FAIL'}"
+            f"RC={'OK' if rc_raw else 'FAIL'}"
         )
 
         token = self._parse_dex(dex_raw)
         if not token:
-            log.error(f"DexScreener failed for {mint[:12]}")
             return None
 
+        # Apply RugCheck (LP burn, security, risks)
         if rc_raw:
             token = self._apply_rugcheck(token, rc_raw)
 
+        # Apply GMGN (optional — smart money, bundle, sniper)
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
-            # Cross-check: GMGN vs DexScreener MC
-            gmgn_td = self._unwrap_gmgn(gmgn_raw)
-            gmgn_mc = float(gmgn_td.get("market_cap") or gmgn_td.get("mc") or 0)
-            if gmgn_mc > 0 and token.mc > 0:
-                diff = abs(gmgn_mc - token.mc) / token.mc
-                if diff > 0.5:
-                    log.warning(
-                        f"MC mismatch {mint[:12]}: "
-                        f"DEX=${token.mc:,.0f} vs GMGN=${gmgn_mc:,.0f} "
-                        f"(diff {diff:.0%})"
-                    )
 
-        # Helius fallback hanya jika GMGN benar-benar kosong
-        if token.top10_pct == 0 and self.cfg.HELIUS_API_KEY:
-            helius_holders, helius_supply = await asyncio.gather(
-                self.helius_get_largest_holders(session, mint),
-                self.helius_get_token_supply(session, mint),
-                return_exceptions=True,
-            )
-            if not isinstance(helius_holders, Exception) and helius_holders:
-                if not isinstance(helius_supply, Exception) and helius_supply:
-                    token = self._apply_helius_holders(token, helius_holders, helius_supply)
+        # ── PRIMARY: Helius DAS for REAL top10% and holder count ──
+        if self.cfg.HELIUS_API_KEY:
+            helius_accounts = await self.helius_get_all_holders(session, mint)
+            if helius_accounts:
+                helius_supply = await self.helius_get_token_supply(session, mint)
+                token = self._calculate_top10_from_helius(token, helius_accounts, helius_supply or {})
 
-        # Helius holder count fallback
-        if token.holder_count_gmgn == 0 and self.cfg.HELIUS_API_KEY:
-            hc = await self.helius_get_token_holder_count(session, mint)
-            if hc > 0:
-                token.holder_count_gmgn = hc
-                log.info(f"Helius fallback holder count {mint[:12]}: {hc}")
-
-        # Final validation log
+        # Final validation
         log.info(
-            f"Final data {mint[:12]}: "
+            f"Final {mint[:12]}: "
             f"MC=${token.mc:,.0f} | "
-            f"Holders={token.holder_count_gmgn or token.holder_count_rc or 0} | "
-            f"Top10={token.top10_pct:.1f}% | "
-            f"LP={token.lp_burn:.0f}%"
+            f"Holders={token.holder_count_gmgn} | "
+            f"Top10={token.top10_pct:.1f}% ({token.top10_source}) | "
+            f"LP={token.lp_burn:.0f}% | "
+            f"Risk={token.risk_norm}/10"
         )
 
         return token
@@ -675,13 +475,22 @@ class DataFetcher:
             txns = pair.get("txns") or {}
             h1 = txns.get("h1") or {}
             cr = pair.get("pairCreatedAt") or 0
+
+            # Check LP burn badge from DexScreener
+            info = pair.get("info") or {}
+            lp_burned = False
+            for badge in info.get("badges") or []:
+                if "burn" in (badge.get("label") or "").lower():
+                    lp_burned = True
+
             if cr:
                 cd = datetime.fromtimestamp(cr / 1000)
                 created, age_h = cd.strftime("%Y-%m-%d %H:%M"), (datetime.now() - cd).total_seconds() / 3600
             else:
                 created, age_h = "unknown", 0.0
             tw, tg, web = self._parse_socials(pair)
-            return Token(
+
+            token = Token(
                 mint=mint, name=base.get("name", "Unknown"),
                 symbol=base.get("symbol", "???"), price=price, mc=mc, liq=liq,
                 vol1h=float(vol.get("h1") or 0), vol6h=float(vol.get("h6") or 0),
@@ -693,6 +502,10 @@ class DataFetcher:
                 dex=pair.get("dexId", ""), pair_addr=pair.get("pairAddress", ""),
                 created=created, age_hours=age_h,
             )
+            if lp_burned:
+                token.lp_burn = 100.0
+                token.gmgn_lp_burned = True
+            return token
         except Exception as e:
             log.debug(f"Parse pair error: {e}")
             return None
@@ -712,11 +525,10 @@ class DataFetcher:
         t.is_rugged = bool(rc.get("rugged"))
         t.mint_auth = rc.get("mintAuthority")
         t.freeze_auth = rc.get("freezeAuthority")
-        
-        # FIX: topHolders adalah 20 wallet terbesar, BUKAN total holder
+
         t.top_holders = rc.get("topHolders") or []
-        
-        # Coba ambil total holder dari RugCheck kalau ada field-nya
+
+        # Holder count — coba field yang valid
         t.holder_count_rc = 0
         for key in ("holderCount", "holders", "totalHolders", "holder_count"):
             val = rc.get(key)
@@ -726,35 +538,73 @@ class DataFetcher:
                     break
                 except (ValueError, TypeError):
                     continue
-        
-        # FIX: Kalau GMGN tidak kasih top10_pct, hitung dari RugCheck topHolders
-        if t.top10_pct == 0 and t.top_holders:
-            total_pct = 0.0
-            for h in t.top_holders[:10]:
-                pct = float(h.get("pct", 0) or 0)
-                if 0 < pct <= 1.0:
-                    pct *= 100
-                total_pct += pct
-            if total_pct > 0:
-                t.top10_pct = round(total_pct, 1)
-                t.top10_source = "RugCheck(est)"
 
-        raw = int(rc.get("score") or 0)
-        t.risk_raw = raw
-        if raw < 500: t.risk_norm, t.risk_label = round(raw/500*3, 1), "good"
-        elif raw < 2000: t.risk_norm, t.risk_label = round(3+(raw-500)/1500*4, 1), "warn"
-        else: t.risk_norm, t.risk_label = min(10.0, round(7+(raw-2000)/3000*3, 1)), "danger"
-        
+        # LP Burn dari RugCheck markets
         for mkt in rc.get("markets") or []:
             lp = mkt.get("lp") or {}
             pct = float(lp.get("lpLockedPct") or 0)
-            if pct > t.lp_burn: t.lp_burn = pct
+            if pct > t.lp_burn:
+                t.lp_burn = pct
             if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
                 t.lp_burn = 100.0
-                
+                t.gmgn_lp_burned = True
+
+        # Risk score
+        raw = int(rc.get("score") or 0)
+        if raw < 500: t.risk_norm, t.risk_label = round(raw/500*3, 1), "good"
+        elif raw < 2000: t.risk_norm, t.risk_label = round(3+(raw-500)/1500*4, 1), "warn"
+        else: t.risk_norm, t.risk_label = min(10.0, round(7+(raw-2000)/3000*3, 1)), "danger"
+
         t.rc_risks = []
         for r in rc.get("risks") or []:
             name = r.get("name", ""); level = (r.get("level") or "").lower()
             desc = r.get("description", ""); val = str(r.get("value") or "")
             if name: t.rc_risks.append((level, name, desc, val))
+        return t
+
+    def _apply_gmgn_data(self, t: Token, data: dict) -> Token:
+        t.gmgn_data = data
+        td = data.get("token") or data if isinstance(data, dict) else {}
+
+        for key in ("top_10_holder_pct", "top_10_holder_rate", "top10HolderPercent",
+                    "top10_holder_rate", "topHolderRate"):
+            raw = td.get(key)
+            if raw is not None:
+                try:
+                    v = float(raw)
+                    if 0 < v <= 1.0: v *= 100
+                    if 0 < v <= 100:
+                        # Hanya pakai GMGN kalau Helius tidak ada
+                        if t.top10_pct == 0:
+                            t.top10_pct = round(v, 1)
+                            t.top10_source = "GMGN"
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        for key in ("holder_count", "holder", "holderCount", "holders", "holder_num"):
+            raw = td.get(key)
+            if raw is not None:
+                try:
+                    # Hanya pakai GMGN kalau Helius tidak ada
+                    if t.holder_count_gmgn == 0:
+                        t.holder_count_gmgn = int(raw)
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        t.dev_hold_pct = float(td.get("dev_hold_pct") or td.get("dev_holding_pct") or 0)
+        t.bundle_pct = float(td.get("bundle_pct") or td.get("bundler_pct") or 0)
+        t.sniper_count = int(td.get("sniper_count") or td.get("sniperCount") or 0)
+        t.smart_money_count = int(td.get("smart_degen_count") or td.get("smartDegenCount") or 0)
+        t.kol_holders = int(td.get("renowned_wallets") or td.get("renowned_wallet_count") or 0)
+        t.is_honeypot = bool(td.get("is_honeypot") or td.get("isHoneypot"))
+        t.rug_ratio = float(td.get("rug_ratio") or td.get("dev_rug_ratio") or 0)
+        t.wash_trade_gmgn = bool(td.get("wash_trade_flag") or td.get("is_wash_trading"))
+        t.fresh_wallet_rate = float(td.get("fresh_wallet_rate") or td.get("freshWalletRate") or 0)
+        t.rat_trader_rate = float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate") or 0)
+
+        if t.smart_money_count > 0:
+            t.smart_money_present = True
+
         return t
