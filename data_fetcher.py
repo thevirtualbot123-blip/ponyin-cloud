@@ -68,7 +68,7 @@ class DataFetcher:
                           payload: dict = None) -> Optional[dict]:
         """
         Low-level fetch to GMGN via tls_client.
-        CRITICAL FIX: API Key sent via x-route-key header.
+        Tries multiple auth methods: x-route-key header, Authorization Bearer, query param.
         """
         import tls_client
         from fake_useragent import UserAgent
@@ -82,7 +82,7 @@ class DataFetcher:
         )
         client.timeout_seconds = 60
 
-        headers = {
+        base_headers = {
             'Host': 'gmgn.ai',
             'accept': 'application/json, text/plain, */*',
             'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -93,87 +93,120 @@ class DataFetcher:
             'user-agent': ua.random,
         }
 
-        # ── FIX: Send GMGN API Key ─────────────────────────────
+        # Try auth methods in order
+        auth_methods = []
         if self.cfg.GMGN_API_KEY:
-            headers['x-route-key'] = self.cfg.GMGN_API_KEY
-            log.debug(f"GMGN API Key attached for {mint[:12]}")
+            auth_methods = [
+                ("header-x-route", {"x-route-key": self.cfg.GMGN_API_KEY}),
+                ("header-auth", {"Authorization": f"Bearer {self.cfg.GMGN_API_KEY}"}),
+                ("header-apikey", {"X-API-Key": self.cfg.GMGN_API_KEY}),
+            ]
         else:
-            log.warning(f"GMGN_API_KEY not set — using public endpoint (rate limited)")
+            log.warning(f"GMGN_API_KEY not set — using public endpoint")
 
-        try:
-            if method == "POST":
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: client.post(url, json=payload, headers=headers)
-                )
-            else:
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: client.get(url, headers=headers)
-                )
-
-            status = response.status_code
-            log.info(f"GMGN {method} {url[:60]} | Status: {status} | Key used: {bool(self.cfg.GMGN_API_KEY)}")
-
-            if status == 200:
-                data = response.json()
-                # DEBUG: Save raw response for inspection
-                try:
-                    import json
-                    with open(f"debug_gmgn_{mint[:8]}.json", "w") as f:
-                        json.dump(data, f, indent=2, default=str)
-                except Exception:
-                    pass
-
-                code = data.get("code", -1)
-                if code == 0 and data.get("data"):
-                    log.info(f"GMGN OK ({mint[:12]}): holder_count={data['data'].get('holder_count','?')}")
-                    return data["data"]
-                else:
-                    sample = str(data)[:200]
-                    log.info(
-                        f"GMGN no data for {mint[:12]}: code={code} "
-                        f"msg={data.get('msg','?')} | sample={sample}"
+        last_error = None
+        for auth_name, auth_headers in auth_methods or [("none", {})]:
+            headers = {**base_headers, **auth_headers}
+            try:
+                if method == "POST":
+                    response = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: client.post(url, json=payload, headers=headers)
                     )
-            elif status == 429:
-                log.error(f"GMGN Rate Limited for {mint[:12]} — API Key invalid or needs upgrade")
-            else:
-                log.info(f"GMGN HTTP {status} for {mint[:12]}")
-        except Exception as e:
-            log.info(f"GMGN tls exception {mint[:12]}: {e}")
+                else:
+                    response = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: client.get(url, headers=headers)
+                    )
 
+                status = response.status_code
+                body = response.text[:500]  # Capture first 500 chars
+
+                log.info(f"GMGN [{auth_name}] {url[:50]} | Status: {status}")
+
+                if status == 200:
+                    data = response.json()
+                    code = data.get("code", -1)
+                    if code == 0 and data.get("data"):
+                        log.info(f"GMGN OK via {auth_name} ({mint[:12]})")
+                        # Save debug
+                        try:
+                            import json
+                            with open(f"debug_gmgn_{mint[:8]}.json", "w") as f:
+                                json.dump(data, f, indent=2, default=str)
+                        except Exception:
+                            pass
+                        return data["data"]
+                    else:
+                        log.warning(f"GMGN [{auth_name}] code={code} msg={data.get('msg','?')}")
+                elif status == 401:
+                    log.warning(f"GMGN [{auth_name}] 401 Unauthorized — wrong key format")
+                elif status == 403:
+                    log.warning(f"GMGN [{auth_name}] 403 Forbidden — key invalid or expired")
+                elif status == 429:
+                    log.error(f"GMGN [{auth_name}] 429 Rate Limited")
+                else:
+                    log.warning(f"GMGN [{auth_name}] HTTP {status}: {body[:100]}")
+
+            except Exception as e:
+                last_error = str(e)
+                log.debug(f"GMGN [{auth_name}] exception: {e}")
+
+        # If all header methods failed, try query param as last resort
+        if self.cfg.GMGN_API_KEY and "?" not in url:
+            qp_url = f"{url}?x-route-key={self.cfg.GMGN_API_KEY}"
+            log.info(f"GMGN trying query param: {qp_url[:60]}")
+            try:
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: client.get(qp_url, headers=base_headers)
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("code") == 0 and data.get("data"):
+                        return data["data"]
+            except Exception as e:
+                log.debug(f"GMGN query param failed: {e}")
+
+        if last_error:
+            log.error(f"GMGN all methods failed for {mint[:12]}: {last_error}")
         return None
 
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         """
-        Try the POST endpoint first (used by gmgnai-wrapper's getTokenInfo),
-        then fallback to GET endpoints.
+        Try multiple GMGN endpoints.
         """
-        # 1) POST /api/v1/mutil_window_token_info
-        data = await self._gmgn_fetch(
-            "https://gmgn.ai/api/v1/mutil_window_token_info",
-            mint,
-            method="POST",
-            payload={"chain": "sol", "addresses": [mint]}
-        )
-        if data:
-            result = data.get("tokens")
-            if isinstance(result, list) and len(result) > 0:
-                return result[0]
-            return data
+        endpoints = [
+            # 1) POST multi-window (most reliable for authenticated users)
+            {
+                "url": "https://gmgn.ai/api/v1/mutil_window_token_info",
+                "method": "POST",
+                "payload": {"chain": "sol", "addresses": [mint]}
+            },
+            # 2) GET token detail (singular)
+            {
+                "url": f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
+                "method": "GET",
+                "payload": None
+            },
+            # 3) GET tokens detail (plural)
+            {
+                "url": f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
+                "method": "GET",
+                "payload": None
+            },
+        ]
 
-        # 2) GET /defi/quotation/v1/tokens/sol/{mint}
-        data = await self._gmgn_fetch(
-            f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
-            mint
-        )
-        if data:
-            return data
+        for ep in endpoints:
+            data = await self._gmgn_fetch(ep["url"], mint, ep["method"], ep["payload"])
+            if data:
+                # Normalize response
+                if isinstance(data, list) and len(data) > 0:
+                    return data[0]
+                if isinstance(data, dict) and "tokens" in data:
+                    tokens = data["tokens"]
+                    if isinstance(tokens, list) and len(tokens) > 0:
+                        return tokens[0]
+                return data
 
-        # 3) GET /defi/quotation/v1/token/sol/{mint}
-        data = await self._gmgn_fetch(
-            f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
-            mint
-        )
-        return data
+        return None
 
     async def gmgn_new_tokens(self, session) -> List[str]:
         """Fetch trending tokens from GMGN (public) via tls_client."""

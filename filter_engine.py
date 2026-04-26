@@ -354,7 +354,7 @@ class FilterEngine:
         t.fee_health = "HEALTHY"
         t.fee_health_reason = "OK"
         
-        # ── FIX: Priority GMGN > Helius > RugCheck (hanya kalau valid > 50) ──
+        # FIX: Priority GMGN > Helius > RugCheck (hanya kalau valid > 50)
         holder_count = 0
         source = ""
         
@@ -495,7 +495,7 @@ class FilterEngine:
         elif t.risk_norm < 4:      score +=  5
         elif t.risk_norm > 6:      score -= 15
         
-        # ── FIX: Gunakan holder count yang paling reliable ──
+        # FIX: Gunakan holder count yang paling reliable
         hc = 0
         if t.holder_count_gmgn > 0:
             hc = t.holder_count_gmgn
@@ -689,19 +689,19 @@ class FilterEngine:
             elif t.bounce_potential: info("Age", age, "Old + bounce")
             else:                    info("Age", age, "Old — cek thesis")
 
-        # ── FIX: Gunakan holder count reliable ──────────────
+        # FIX: Gunakan holder count reliable
         hc = 0
         if t.holder_count_gmgn > 0:
             hc = t.holder_count_gmgn
         elif t.holder_count_rc > 50:
             hc = t.holder_count_rc
         
-        if hc > 0:
-            if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
-            elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")
-            elif hc > 100: info("Holders", f"{hc}", "Moderate")
-            elif hc > 50:  info("Holders", f"{hc}", "⚠ Sedikit")
-            else:          info("Holders", f"{hc}", "⚠ Sangat sedikit")
+            if hc > 0:
+                if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
+                elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")
+                elif hc > 100: info("Holders", f"{hc}", "Moderate")
+                elif hc > 50:  info("Holders", f"{hc}", "⚠ Sedikit")
+                else:          info("Holders", f"{hc}", "⚠ Sangat sedikit")
 
         if   t.fee_health == "HEALTHY": ok("Fee Health",   "OK", "✓")
         elif t.fee_health == "LOW":     info("Fee Health",  "LOW", t.fee_health_reason[:50])

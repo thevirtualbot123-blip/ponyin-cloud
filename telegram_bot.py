@@ -1,9 +1,9 @@
 """
-telegram_bot.py — PONYIN AI AGENT v4.1
+telegram_bot.py — PONYIN AI AGENT v4.2
 Fix:
-  - cs not defined error → semua variable di-declare dengan benar
-  - Tambah GMGN link (trading platform utama)
-  - Format pesan lebih informatif
+  - holder count display: priority GMGN/Helius > RugCheck
+  - All variables properly declared
+  - GMGN link (trading platform utama)
 """
 
 import asyncio
@@ -76,7 +76,7 @@ class TelegramBot:
         flags      = token_data.get("flags", 0)
         pt         = token_data.get("position_type", "?")
         cluster    = token_data.get("cluster_risk", "?")
-        cs         = token_data.get("cluster_score", 0)      # FIX: declare cs
+        cs         = token_data.get("cluster_score", 0)
         dev_f      = token_data.get("dev_farm_risk", "?")
         sm         = token_data.get("smart_money_present", False)
         timing     = token_data.get("timing_score", 0)
@@ -88,8 +88,14 @@ class TelegramBot:
         mint_auth  = token_data.get("mint_auth")
         buys       = token_data.get("buys1h", 0)
         sells      = token_data.get("sells1h", 0)
-        momentum   = token_data.get("momentum_score", 50)    # FIX: declare momentum
-        hcount     = token_data.get("holder_count_rc", 0)    # FIX: declare hcount
+        momentum   = token_data.get("momentum_score", 50)
+        
+        # ── FIX: Prioritas holder count GMGN/Helius > RugCheck ──
+        hc_gmgn = token_data.get("holder_count_gmgn", 0)
+        hc_rc   = token_data.get("holder_count_rc", 0)
+        hcount  = hc_gmgn if hc_gmgn > 0 else (hc_rc if hc_rc > 50 else 0)
+        hcount_str = f"{hcount}" if hcount > 0 else "N/A"
+        
         plan       = token_data.get("plan", {})
         sizing     = token_data.get("sizing_note", "")
 
@@ -109,7 +115,6 @@ class TelegramBot:
         lp_str     = f"{lp:.0f}%" if lp > 0 else "⚠️ 0%"
         sm_str     = "✓ Ada" if sm else "–"
         mint_str   = "❌ ACTIVE" if mint_auth else "✓ Revoked"
-        hcount_str = f"{hcount}" if hcount > 0 else "N/A"
         wash_warn  = "\n⚠️ <b>WASH TRADING DETECTED</b>" if wash else ""
         bounce_str = "\n🔄 <b>Bounce Potential</b>" if bounce else ""
         bsr_str    = f"{buys}B/{sells}S" if (buys + sells) > 0 else "N/A"
@@ -171,7 +176,7 @@ class TelegramBot:
             if sizing:
                 msg += f"\n💰 {sizing[:100]}\n"
 
-        # Links — GMGN sebagai utama (kamu trade di sini)
+        # Links
         gmgn_url = f"https://gmgn.ai/sol/token/Hanzx0OI_{mint}"
         dex_url  = f"https://dexscreener.com/solana/{mint}"
         rc_url   = f"https://rugcheck.xyz/tokens/{mint}"
@@ -249,7 +254,7 @@ class TelegramBot:
 
     async def _send_startup(self):
         await self.send(
-            "🤖 <b>PONYIN AI AGENT v4.1 aktif!</b>\n\n"
+            "🤖 <b>PONYIN AI AGENT v4.2 aktif!</b>\n\n"
             "<b>Commands:</b>\n"
             "/scan — scan token baru sekali\n"
             "/check &lt;CA&gt; — analisis satu token\n"
@@ -257,7 +262,7 @@ class TelegramBot:
             "/log — 10 signal terakhir\n"
             "/help — semua perintah\n\n"
             "Atau <b>paste CA langsung</b> (32+ karakter)\n\n"
-            "<i>Fix v4.1: cs error fixed, GMGN link, fee filter</i>"
+            "<i>Fix v4.2: holder count GMGN/Helius priority, auth debug</i>"
         )
 
     async def _handle_update(self, update: dict):
