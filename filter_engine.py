@@ -1,5 +1,8 @@
 """
-filter_engine.py — PONYIN AI AGENT v7.0
+filter_engine.py — PONYIN AI AGENT v7.4
+Fixes:
+  - holder_count priority: GMGN > Helius > RugCheck (ignore RugCheck 20)
+  - fee_health uses reliable holder count only
 """
 import re, logging
 from datetime import datetime
@@ -224,8 +227,6 @@ class FilterEngine:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
-        # FIX: synced with data_fetcher._apply_gmgn_data — added
-        # "topHolderRate" and "top_10_holder_percent" which were missing.
         for key in ("top_10_holder_pct", "top_10_holder_rate",
                     "top10HolderPercent", "top10_holder_rate",
                     "topHolderRate", "top_10_holder_percent"):
@@ -242,7 +243,6 @@ class FilterEngine:
                 break
 
         if not t.holder_count_gmgn:
-            # FIX: synced with data_fetcher — added "holders" and "holder_num"
             for key in ("holder_count", "holder", "holderCount",
                         "holders", "holder_num"):
                 hc = td.get(key)
@@ -353,15 +353,24 @@ class FilterEngine:
     def _check_fee_health(self, t: Token) -> Token:
         t.fee_health = "HEALTHY"
         t.fee_health_reason = "OK"
-        if hasattr(t, 'holder_count_gmgn') and t.holder_count_gmgn > 0:
+        
+        # ── FIX: Priority GMGN > Helius > RugCheck (hanya kalau valid > 50) ──
+        holder_count = 0
+        source = ""
+        
+        if t.holder_count_gmgn > 0:
             holder_count = t.holder_count_gmgn
             source = "GMGN"
-        elif t.holder_count_rc > 0 and t.age_hours >= 6.0:
+        elif t.holder_count_rc > 50:
             holder_count = t.holder_count_rc
-            source = "RugCheck(mature)"
+            source = "RugCheck"
         else:
-            t.fee_health_reason = f"Fresh/no data (age={t.age_hours:.1f}h)"
+            t.fee_health_reason = (
+                f"No reliable holder data (age={t.age_hours:.1f}h, "
+                f"GMGN={t.holder_count_gmgn}, RC={t.holder_count_rc})"
+            )
             return t
+            
         reasons = []
         fh = "HEALTHY"
         if source == "GMGN":
@@ -485,7 +494,14 @@ class FilterEngine:
         if   t.risk_norm < 2:      score += 10
         elif t.risk_norm < 4:      score +=  5
         elif t.risk_norm > 6:      score -= 15
-        hc = t.holder_count_gmgn if t.holder_count_gmgn else t.holder_count_rc
+        
+        # ── FIX: Gunakan holder count yang paling reliable ──
+        hc = 0
+        if t.holder_count_gmgn > 0:
+            hc = t.holder_count_gmgn
+        elif t.holder_count_rc > 50:
+            hc = t.holder_count_rc
+        
         if hc > 0:
             if   hc > 500: score += 10
             elif hc > 200: score +=  5
@@ -673,7 +689,13 @@ class FilterEngine:
             elif t.bounce_potential: info("Age", age, "Old + bounce")
             else:                    info("Age", age, "Old — cek thesis")
 
-        hc = t.holder_count_gmgn if t.holder_count_gmgn else t.holder_count_rc
+        # ── FIX: Gunakan holder count reliable ──────────────
+        hc = 0
+        if t.holder_count_gmgn > 0:
+            hc = t.holder_count_gmgn
+        elif t.holder_count_rc > 50:
+            hc = t.holder_count_rc
+        
         if hc > 0:
             if   hc > 500: ok("Holders",   f"{hc}", "Luas ✓")
             elif hc > 200: ok("Holders",   f"{hc}", "Cukup ✓")

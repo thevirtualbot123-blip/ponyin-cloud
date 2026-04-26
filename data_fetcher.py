@@ -1,7 +1,11 @@
 """
-data_fetcher.py — PONYIN AI AGENT v7.3 FINAL
-Root cause fix: random_tls_extension_order=True (bypass Cloudflare TLS fingerprint)
-                 new session every request, priority header, dual endpoint
+data_fetcher.py — PONYIN AI AGENT v7.4
+Fixes:
+  - GMGN_API_KEY now actually sent in x-route-key header
+  - RugCheck topHolders no longer misused as total holder count
+  - Helius DAS getTokenAccounts fixed to read result.total
+  - Aggressive debug logging + cross-check validation
+  - Robust GMGN key parsing (top10_pct, holder_count, etc.)
 """
 import asyncio, aiohttp, logging, re, random
 from datetime import datetime
@@ -59,13 +63,12 @@ class DataFetcher:
             return []
         return data if isinstance(data, list) else (data.get("pairs") or [])
 
-    # ── GMGN API (FIX: random_tls_extension_order + new session per request) ─
+    # ── GMGN API (FIXED: API Key sent in x-route-key header) ─
     async def _gmgn_fetch(self, url: str, mint: str, method: str = "GET",
                           payload: dict = None) -> Optional[dict]:
         """
         Low-level fetch to GMGN via tls_client.
-        CRITICAL FIX: random_tls_extension_order=True (bypasses Cloudflare TLS
-        fingerprint) + new session for EVERY request.
+        CRITICAL FIX: API Key sent via x-route-key header.
         """
         import tls_client
         from fake_useragent import UserAgent
@@ -73,8 +76,6 @@ class DataFetcher:
         ua = UserAgent()
         identifier = random.choice(["chrome_120", "chrome_122", "firefox_120"])
 
-        # KEY FIX: random_tls_extension_order=True — this is what the working
-        # gmgnai-wrapper uses and what makes Cloudflare accept the request
         client = tls_client.Session(
             client_identifier=identifier,
             random_tls_extension_order=True,
@@ -92,6 +93,13 @@ class DataFetcher:
             'user-agent': ua.random,
         }
 
+        # ── FIX: Send GMGN API Key ─────────────────────────────
+        if self.cfg.GMGN_API_KEY:
+            headers['x-route-key'] = self.cfg.GMGN_API_KEY
+            log.debug(f"GMGN API Key attached for {mint[:12]}")
+        else:
+            log.warning(f"GMGN_API_KEY not set — using public endpoint (rate limited)")
+
         try:
             if method == "POST":
                 response = await asyncio.get_event_loop().run_in_executor(
@@ -103,8 +111,18 @@ class DataFetcher:
                 )
 
             status = response.status_code
+            log.info(f"GMGN {method} {url[:60]} | Status: {status} | Key used: {bool(self.cfg.GMGN_API_KEY)}")
+
             if status == 200:
                 data = response.json()
+                # DEBUG: Save raw response for inspection
+                try:
+                    import json
+                    with open(f"debug_gmgn_{mint[:8]}.json", "w") as f:
+                        json.dump(data, f, indent=2, default=str)
+                except Exception:
+                    pass
+
                 code = data.get("code", -1)
                 if code == 0 and data.get("data"):
                     log.info(f"GMGN OK ({mint[:12]}): holder_count={data['data'].get('holder_count','?')}")
@@ -115,6 +133,8 @@ class DataFetcher:
                         f"GMGN no data for {mint[:12]}: code={code} "
                         f"msg={data.get('msg','?')} | sample={sample}"
                     )
+            elif status == 429:
+                log.error(f"GMGN Rate Limited for {mint[:12]} — API Key invalid or needs upgrade")
             else:
                 log.info(f"GMGN HTTP {status} for {mint[:12]}")
         except Exception as e:
@@ -127,7 +147,7 @@ class DataFetcher:
         Try the POST endpoint first (used by gmgnai-wrapper's getTokenInfo),
         then fallback to GET endpoints.
         """
-        # 1) POST /api/v1/mutil_window_token_info (used by gmgnai-wrapper — most reliable)
+        # 1) POST /api/v1/mutil_window_token_info
         data = await self._gmgn_fetch(
             "https://gmgn.ai/api/v1/mutil_window_token_info",
             mint,
@@ -135,13 +155,12 @@ class DataFetcher:
             payload={"chain": "sol", "addresses": [mint]}
         )
         if data:
-            # Response structure: {"data": {"tokens": [token_data]}}
             result = data.get("tokens")
             if isinstance(result, list) and len(result) > 0:
                 return result[0]
-            return data  # mungkin sudah flat
+            return data
 
-        # 2) GET /defi/quotation/v1/tokens/sol/{mint} (plural)
+        # 2) GET /defi/quotation/v1/tokens/sol/{mint}
         data = await self._gmgn_fetch(
             f"https://gmgn.ai/defi/quotation/v1/tokens/sol/{mint}",
             mint
@@ -149,7 +168,7 @@ class DataFetcher:
         if data:
             return data
 
-        # 3) GET /defi/quotation/v1/token/sol/{mint} (singular)
+        # 3) GET /defi/quotation/v1/token/sol/{mint}
         data = await self._gmgn_fetch(
             f"https://gmgn.ai/defi/quotation/v1/token/sol/{mint}",
             mint
@@ -175,6 +194,8 @@ class DataFetcher:
             'referer': 'https://gmgn.ai/?chain=sol',
             'user-agent': ua.random,
         }
+        if self.cfg.GMGN_API_KEY:
+            headers['x-route-key'] = self.cfg.GMGN_API_KEY
 
         endpoints = [
             "https://gmgn.ai/defi/quotation/v1/rank/sol/new_creation/1h"
@@ -217,9 +238,13 @@ class DataFetcher:
     def _unwrap_gmgn(data: dict) -> dict:
         if not data:
             return {}
-        token_nested = data.get("token")
-        if isinstance(token_nested, dict) and token_nested:
-            return token_nested
+        if "data" in data and isinstance(data["data"], dict):
+            inner = data["data"]
+            if "token" in inner and isinstance(inner["token"], dict):
+                return inner["token"]
+            return inner
+        if "token" in data and isinstance(data["token"], dict):
+            return data["token"]
         return data
 
     @staticmethod
@@ -248,10 +273,14 @@ class DataFetcher:
         t.gmgn_data = data
         td = self._unwrap_gmgn(data)
 
+        # DEBUG: log semua key yang tersedia
+        log.debug(f"GMGN keys for {t.mint[:12]}: {list(td.keys())}")
+
         # ── Top 10 holders ────────────────────────────────
         for key in ("top_10_holder_pct", "top_10_holder_rate",
                     "top10HolderPercent", "top10_holder_rate",
-                    "topHolderRate", "top_10_holder_percent"):
+                    "topHolderRate", "top_10_holder_percent",
+                    "top10_pct", "top10Percent", "top_holder_pct"):
             raw = td.get(key)
             if raw is not None:
                 try:
@@ -261,16 +290,22 @@ class DataFetcher:
                     if 0 < v <= 100:
                         t.top10_pct = round(v, 1)
                         t.top10_source = "GMGN"
+                        log.info(f"GMGN top10 for {t.mint[:12]}: {t.top10_pct}% (key={key})")
                 except (ValueError, TypeError):
                     pass
                 break
 
         # ── Holder count ──────────────────────────────────
-        hc = self._gmgn_int(td,
-            "holder_count", "holder", "holderCount",
-            "holders", "holder_num")
-        if hc:
-            t.holder_count_gmgn = hc
+        for key in ("holder_count", "holder", "holderCount",
+                    "holders", "holder_num", "total_holders", "totalHolders"):
+            raw = td.get(key)
+            if raw is not None:
+                try:
+                    t.holder_count_gmgn = int(raw)
+                    log.info(f"GMGN holders for {t.mint[:12]}: {t.holder_count_gmgn} (key={key})")
+                    break
+                except (ValueError, TypeError):
+                    pass
 
         # ── Dev supply ────────────────────────────────────
         dev = self._gmgn_float(td,
@@ -376,21 +411,35 @@ class DataFetcher:
     async def helius_get_token_holder_count(self, session, mint: str) -> int:
         if not self.cfg.HELIUS_API_KEY:
             return 0
+        # FIX: Helius DAS getTokenAccounts — ambil total dari field "total"
         payload = {
             "jsonrpc": "2.0", "id": 1,
             "method": "getTokenAccounts",
-            "params": {"mint": mint, "limit": 1, "displayOptions": {}},
+            "params": {
+                "mint": mint,
+                "limit": 1000,
+                "page": 1,
+            },
         }
         try:
             async with session.post(self.cfg.HELIUS_RPC_URL, json=payload,
-                                    timeout=aiohttp.ClientTimeout(total=10)) as r:
+                                    timeout=aiohttp.ClientTimeout(total=15)) as r:
                 if r.status == 200:
                     data = await r.json()
-                    result = data.get("result")
-                    if isinstance(result, dict):
-                        total = result.get("total", 0)
+                    result = data.get("result", {})
+                    total = result.get("total", 0)
+                    if total:
                         log.info(f"Helius DAS holder count for {mint[:12]}: {total}")
                         return int(total)
+                    # Fallback: count unique owners manually
+                    accounts = result.get("token_accounts", [])
+                    if accounts:
+                        owners = set()
+                        for acc in accounts:
+                            owner = acc.get("owner") or acc.get("account") or ""
+                            if owner:
+                                owners.add(owner)
+                        return len(owners)
         except Exception as e:
             log.info(f"Helius DAS exception {mint[:12]}: {e}")
         return 0
@@ -498,13 +547,35 @@ class DataFetcher:
         gmgn_raw = None if isinstance(gmgn_raw, Exception) else gmgn_raw
         rc_raw = None if isinstance(rc_raw, Exception) else rc_raw
 
+        # Log sumber data
+        log.info(
+            f"Sources for {mint[:12]}: "
+            f"DEX={'OK' if dex_raw else 'FAIL'} | "
+            f"GMGN={'OK' if gmgn_raw else 'FAIL'} | "
+            f"RugCheck={'OK' if rc_raw else 'FAIL'}"
+        )
+
         token = self._parse_dex(dex_raw)
         if not token:
+            log.error(f"DexScreener failed for {mint[:12]}")
             return None
+
         if rc_raw:
             token = self._apply_rugcheck(token, rc_raw)
+
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
+            # Cross-check: GMGN vs DexScreener MC
+            gmgn_td = self._unwrap_gmgn(gmgn_raw)
+            gmgn_mc = float(gmgn_td.get("market_cap") or gmgn_td.get("mc") or 0)
+            if gmgn_mc > 0 and token.mc > 0:
+                diff = abs(gmgn_mc - token.mc) / token.mc
+                if diff > 0.5:
+                    log.warning(
+                        f"MC mismatch {mint[:12]}: "
+                        f"DEX=${token.mc:,.0f} vs GMGN=${gmgn_mc:,.0f} "
+                        f"(diff {diff:.0%})"
+                    )
 
         # Helius fallback hanya jika GMGN benar-benar kosong
         if token.top10_pct == 0 and self.cfg.HELIUS_API_KEY:
@@ -517,10 +588,21 @@ class DataFetcher:
                 if not isinstance(helius_supply, Exception) and helius_supply:
                     token = self._apply_helius_holders(token, helius_holders, helius_supply)
 
+        # Helius holder count fallback
         if token.holder_count_gmgn == 0 and self.cfg.HELIUS_API_KEY:
             hc = await self.helius_get_token_holder_count(session, mint)
             if hc > 0:
                 token.holder_count_gmgn = hc
+                log.info(f"Helius fallback holder count {mint[:12]}: {hc}")
+
+        # Final validation log
+        log.info(
+            f"Final data {mint[:12]}: "
+            f"MC=${token.mc:,.0f} | "
+            f"Holders={token.holder_count_gmgn or token.holder_count_rc or 0} | "
+            f"Top10={token.top10_pct:.1f}% | "
+            f"LP={token.lp_burn:.0f}%"
+        )
 
         return token
 
@@ -597,22 +679,49 @@ class DataFetcher:
         t.is_rugged = bool(rc.get("rugged"))
         t.mint_auth = rc.get("mintAuthority")
         t.freeze_auth = rc.get("freezeAuthority")
+        
+        # FIX: topHolders adalah 20 wallet terbesar, BUKAN total holder
+        t.top_holders = rc.get("topHolders") or []
+        
+        # Coba ambil total holder dari RugCheck kalau ada field-nya
+        t.holder_count_rc = 0
+        for key in ("holderCount", "holders", "totalHolders", "holder_count"):
+            val = rc.get(key)
+            if val is not None:
+                try:
+                    t.holder_count_rc = int(val)
+                    break
+                except (ValueError, TypeError):
+                    continue
+        
+        # FIX: Kalau GMGN tidak kasih top10_pct, hitung dari RugCheck topHolders
+        if t.top10_pct == 0 and t.top_holders:
+            total_pct = 0.0
+            for h in t.top_holders[:10]:
+                pct = float(h.get("pct", 0) or 0)
+                if 0 < pct <= 1.0:
+                    pct *= 100
+                total_pct += pct
+            if total_pct > 0:
+                t.top10_pct = round(total_pct, 1)
+                t.top10_source = "RugCheck(est)"
+
         raw = int(rc.get("score") or 0)
         t.risk_raw = raw
         if raw < 500: t.risk_norm, t.risk_label = round(raw/500*3, 1), "good"
         elif raw < 2000: t.risk_norm, t.risk_label = round(3+(raw-500)/1500*4, 1), "warn"
         else: t.risk_norm, t.risk_label = min(10.0, round(7+(raw-2000)/3000*3, 1)), "danger"
+        
         for mkt in rc.get("markets") or []:
             lp = mkt.get("lp") or {}
             pct = float(lp.get("lpLockedPct") or 0)
             if pct > t.lp_burn: t.lp_burn = pct
             if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
                 t.lp_burn = 100.0
+                
         t.rc_risks = []
         for r in rc.get("risks") or []:
             name = r.get("name", ""); level = (r.get("level") or "").lower()
             desc = r.get("description", ""); val = str(r.get("value") or "")
             if name: t.rc_risks.append((level, name, desc, val))
-        t.top_holders = rc.get("topHolders") or []
-        t.holder_count_rc = len(t.top_holders)
         return t
