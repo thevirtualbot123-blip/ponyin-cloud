@@ -129,34 +129,65 @@ class DataFetcher:
 
         return None
 
+    # URL bridge publik yang sudah terbukti jalan
+    _BRIDGE_DEFAULT = "https://ponyin-cloud-production.up.railway.app"
+
     async def gmgn_via_bridge(self, session, mint: str) -> Optional[dict]:
         """
-        Ambil data GMGN via Node.js bridge (lebih andal, bypass Cloudflare).
-        Set env GMGN_BRIDGE_URL=http://localhost:3000 atau URL Railway service.
+        Ambil data GMGN via Node.js bridge.
+        FIX v8: hapus percobaan internal Railway (http://gmgn-bridge:8080) karena
+        menyebabkan 5 detik timeout tiap call. Langsung pakai public URL.
+        Priority: GMGN_BRIDGE_URL env var → default hardcoded URL.
         """
         import os
-        bridge_url = os.getenv("GMGN_BRIDGE_URL", "").rstrip("/")
-        if not bridge_url:
-            return None
-        try:
-            data = await self._get(session, f"{bridge_url}/token/{mint}", timeout=10)
-            if not data:
-                return None
-            # Format: {"code":0,"data":{...}} atau langsung token dict
-            if isinstance(data, dict):
-                if data.get("code") == 0 and data.get("data"):
-                    return data["data"]
-                if "token" in data or "address" in data or "mint" in data:
-                    return data
-            return None
-        except Exception as e:
-            log.debug(f"GMGN bridge error {mint[:12]}: {e}")
+        # Ambil URL: env var dulu, fallback ke hardcoded public URL
+        public_url = os.getenv("GMGN_BRIDGE_URL", self._BRIDGE_DEFAULT).rstrip("/")
+        if not public_url:
             return None
 
+        # Opsional: internal Railway hanya jika GMGN_BRIDGE_INTERNAL diset eksplisit
+        internal_url = os.getenv("GMGN_BRIDGE_INTERNAL", "").rstrip("/")
+        urls_to_try = []
+        if internal_url:
+            urls_to_try.append(f"{internal_url}/token/{mint}")
+        urls_to_try.append(f"{public_url}/token/{mint}")
+
+        for url in urls_to_try:
+            try:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                    if resp.status != 200:
+                        log.debug(f"Bridge HTTP {resp.status} untuk {mint[:12]}: {url[:50]}")
+                        continue
+                    data = await resp.json()
+
+                    if isinstance(data, dict):
+                        # Format {"code":0,"data":{...}}
+                        if data.get("code") == 0 and data.get("data"):
+                            log.info(f"GMGN bridge OK: {mint[:12]}")
+                            return data["data"]
+                        # Format langsung data token
+                        if "address" in data or "mint" in data or "token" in data:
+                            log.info(f"GMGN bridge OK (direct): {mint[:12]}")
+                            return data
+                        # Bridge error response
+                        if data.get("error"):
+                            log.debug(f"Bridge error response {mint[:12]}: {data.get('error')}")
+                            continue
+
+                    log.debug(f"Bridge response tidak dikenali {mint[:12]}: {str(data)[:80]}")
+
+            except asyncio.TimeoutError:
+                log.debug(f"Bridge timeout {mint[:12]}: {url[:50]}")
+                continue
+            except Exception as e:
+                log.debug(f"Bridge error {mint[:12]}: {e}")
+                continue
+
+        return None
     async def gmgn_new_tokens_via_bridge(self, session) -> List[str]:
-        """Discovery token baru via Node.js bridge."""
+        """Discovery token baru via Node.js bridge. FIX v8: pakai hardcoded fallback URL."""
         import os
-        bridge_url = os.getenv("GMGN_BRIDGE_URL", "").rstrip("/")
+        bridge_url = os.getenv("GMGN_BRIDGE_URL", self._BRIDGE_DEFAULT).rstrip("/")
         if not bridge_url:
             return []
         mints: List[str] = []
@@ -352,9 +383,26 @@ class DataFetcher:
             return t
 
         SYSTEM_ADDRS = {
+            # System programs
             "11111111111111111111111111111111",
             "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            # Burn / incinerator
+            "1nc1nerator11111111111111111111111111111111",
+            # Raydium
+            "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",   # Raydium AMM v4
+            "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",   # Raydium AMM authority
+            "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",   # Raydium CLMM
+            "HWy1jotHpo6UqeQxx49dpYYdQB8wj9Qk9MdxwjLvDHB8",   # Raydium pool v3
+            # Orca
+            "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",    # Orca Whirlpools
+            "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",   # Orca v2
+            # pump.fun / pumpswap
+            "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",    # pump.fun program
+            "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg",   # pumpswap pool
+            # Meteora
+            "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkAW7cP",   # Meteora DLMM
+            "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",   # Meteora LB
         }
 
         # Dedup by owner, hitung dari raw amount (bukan uiAmount)
@@ -493,7 +541,9 @@ class DataFetcher:
         min_liq=1_000, min_vol1h=1_000, allowed_dex=None, max_results=20
     ) -> List[Tuple[float, str]]:
         if allowed_dex is None:
-            allowed_dex = {"pump_fun", "pumpfun", "pump.fun", "raydium", "meteora", "orca"}
+            # FIX v8: tambah pumpswap — DEX utama pump.fun setelah graduate bonding curve
+            allowed_dex = {"pump_fun", "pumpfun", "pump.fun", "pumpswap", "pump_swap",
+                           "raydium", "meteora", "orca", "lifinity", "phoenix"}
 
         raw_mints = await self.get_new_token_mints(session)
 
@@ -610,7 +660,15 @@ class DataFetcher:
 
         token = self._parse_dex(dex_raw)
         if not token:
-            return None
+            # FIX v8: DexScreener gagal (token terlalu baru / belum indexed)
+            # Coba bangun Token minimal dari RugCheck agar tidak langsung return None
+            if rc_raw:
+                token = self._build_token_from_rugcheck(rc_raw, mint)
+                if token:
+                    log.info(f"DEX fail — using RugCheck fallback for {mint[:12]}")
+            if not token:
+                log.warning(f"fetch_token: semua sumber gagal untuk {mint[:12]}")
+                return None
 
         # Apply RugCheck (LP burn, security, risks)
         if rc_raw:
@@ -719,6 +777,42 @@ class DataFetcher:
         if not pool: return None
         best = max(pool, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0))
         return self._parse_pair(best)
+
+    def _build_token_from_rugcheck(self, rc: dict, mint: str) -> Optional[Token]:
+        """
+        FIX v8: Bangun Token minimal dari RugCheck saat DexScreener gagal.
+        Berguna untuk token yang baru muncul dan belum diindeks DexScreener.
+        """
+        try:
+            meta = rc.get("tokenMeta") or {}
+            name   = meta.get("name") or rc.get("tokenProgram") or "Unknown"
+            symbol = meta.get("symbol") or "???"
+
+            # Coba ambil price/mc dari fileMeta atau markets
+            price = 0.0
+            mc    = 0.0
+            liq   = 0.0
+            for mkt in rc.get("markets") or []:
+                lp = mkt.get("lp") or {}
+                price_raw = mkt.get("price") or mkt.get("priceUsd") or 0
+                if price_raw: price = float(price_raw)
+                liq_raw = lp.get("lpCurrentSupply") or mkt.get("liquidity") or 0
+                if liq_raw: liq = max(liq, float(liq_raw))
+
+            token = Token(
+                mint=mint,
+                name=name,
+                symbol=symbol,
+                price=price,
+                mc=mc,
+                liq=liq,
+                dex="rugcheck-fallback",
+            )
+            log.info(f"RugCheck fallback token: {name} ({symbol}) mint={mint[:12]}")
+            return token
+        except Exception as e:
+            log.debug(f"_build_token_from_rugcheck error {mint[:12]}: {e}")
+            return None
 
     def _apply_rugcheck(self, t: Token, rc: dict) -> Token:
         if not rc: return t
