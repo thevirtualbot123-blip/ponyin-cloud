@@ -659,24 +659,27 @@ class FilterEngine:
         if t.top10_pct == 0:
             info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual di GMGN/Helius")
         elif "Helius" in t.top10_source:
-            if t.top10_pct > 55:
-                bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE [Helius REAL]", f"{t.top10_pct:.1f}%")
-            elif t.top10_pct > 30:
-                bad("S3 Top10", f"{t.top10_pct:.1f}% > 30% [Helius REAL]", f"{t.top10_pct:.1f}%")
+            # FIX v8: gunakan cfg.MAX_TOP10_PCT (default 55) bukan hardcoded 30%
+            # Helius lebih akurat dari RugCheck, tapi 30-55% pada token baru adalah normal
+            # hanya flag jika benar-benar di atas threshold config
+            if t.top10_pct > cfg.MAX_TOP10_PCT:
+                bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT:.0f}% — CABAL/BUNDLE [Helius REAL]", f"{t.top10_pct:.1f}%")
+            elif t.top10_pct > 40:
+                info("S3 Top10", f"{t.top10_pct:.1f}% agak tinggi [Helius — cek BubbleMaps]", f"{t.top10_pct:.1f}% ⚠")
             else:
                 ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
         elif "RugCheck" in t.top10_source:
-            if t.top10_pct > 55:
-                bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE [RugCheck EST]", f"{t.top10_pct:.1f}% ⚠️ EST")
+            if t.top10_pct > cfg.MAX_TOP10_PCT:
+                bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT:.0f}% — CABAL/BUNDLE [RugCheck EST]", f"{t.top10_pct:.1f}% ⚠️ EST")
             elif t.top10_pct > 30:
                 info("S3 Top10", f"{t.top10_pct:.1f}% > 30% [RugCheck EST — cek GMGN]", f"{t.top10_pct:.1f}% ⚠️ EST")
             else:
                 info("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "OK ⚠️ EST")
         else:
-            if t.top10_pct > 55:
-                bad("S3 Top10", f"{t.top10_pct:.1f}% > 55% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
-            elif t.top10_pct > 30:
-                bad("S3 Top10", f"{t.top10_pct:.1f}% > 30%", f"{t.top10_pct:.1f}%")
+            if t.top10_pct > cfg.MAX_TOP10_PCT:
+                bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT:.0f}% — CABAL/BUNDLE", f"{t.top10_pct:.1f}%")
+            elif t.top10_pct > 40:
+                bad("S3 Top10", f"{t.top10_pct:.1f}% > 40%", f"{t.top10_pct:.1f}%")
             else:
                 ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
 
