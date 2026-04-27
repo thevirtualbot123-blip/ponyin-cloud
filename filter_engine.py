@@ -237,6 +237,7 @@ class FilterEngine:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
+        # FIX v9: GMGN selalu override top10 — sudah difilter DEX vault oleh GMGN
         for key in ("top_10_holder_pct", "top_10_holder_rate",
                     "top10HolderPercent", "top10_holder_rate",
                     "topHolderRate", "top_10_holder_percent"):
@@ -246,9 +247,8 @@ class FilterEngine:
                     v = float(raw)
                     if 0 < v <= 1.0: v *= 100
                     if 0 < v <= 100:
-                        if t.top10_pct == 0:
-                            t.top10_pct = round(v, 1)
-                            t.top10_source = "GMGN"
+                        t.top10_pct    = round(v, 1)
+                        t.top10_source = "GMGN"
                 except (ValueError, TypeError):
                     pass
                 break
