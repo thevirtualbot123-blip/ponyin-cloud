@@ -50,6 +50,17 @@ class DataFetcher:
             log.debug(f"Fetch error {url[:70]}: {e}")
             return None
 
+    @staticmethod
+    def _unwrap_gmgn(data: dict) -> dict:
+        """Unwrap GMGN response — called from filter_engine too."""
+        if not isinstance(data, dict):
+            return {}
+        # Try nested "token" key first, fallback to data itself
+        inner = data.get("token")
+        if isinstance(inner, dict):
+            return inner
+        return data
+
     # ── DexScreener ─────────────────────────────────────
     async def dex_token(self, session, mint: str) -> Optional[dict]:
         return await self._get(session, f"https://api.dexscreener.com/tokens/v1/solana/{mint}")
@@ -351,42 +362,120 @@ class DataFetcher:
         return d if isinstance(d, list) else []
 
     # ── FILTERED SCAN ────────────────────────────────────
+    async def dex_search_new_solana(self, session) -> List[str]:
+        """Fallback: cari token baru Solana langsung dari DexScreener search."""
+        mints: List[str] = []
+        urls = [
+            "https://api.dexscreener.com/latest/dex/search?q=pumpfun+solana",
+            "https://api.dexscreener.com/latest/dex/search?q=pump.fun+solana",
+            "https://api.dexscreener.com/latest/dex/search?q=raydium+solana",
+        ]
+        for url in urls:
+            data = await self._get(session, url, timeout=10)
+            if not data:
+                continue
+            pairs = data.get("pairs") or (data if isinstance(data, list) else [])
+            for p in (pairs if isinstance(pairs, list) else []):
+                if not isinstance(p, dict):
+                    continue
+                if p.get("chainId") == "solana":
+                    addr = (p.get("baseToken") or {}).get("address", "")
+                    if addr and len(addr) >= 32:
+                        mints.append(addr)
+        unique = list(dict.fromkeys(mints))
+        log.info(f"DexSearch fallback: {len(unique)} mints")
+        return unique[:60]
+
     async def get_filtered_scan_mints(
         self, session, min_mc=5_000, max_mc=50_000,
         min_liq=1_000, min_vol1h=3_000, allowed_dex=None, max_results=20
     ) -> List[Tuple[float, str]]:
         if allowed_dex is None:
             allowed_dex = {"pump_fun", "pumpfun", "pump.fun", "raydium", "meteora", "orca"}
+
         raw_mints = await self.get_new_token_mints(session)
+
+        # ── FIX: fallback ke DexSearch jika discovery utama gagal/sedikit ──
+        if len(raw_mints) < 10:
+            log.warning(f"Discovery hanya {len(raw_mints)} mint, coba DexSearch fallback")
+            dex_mints = await self.dex_search_new_solana(session)
+            for m in dex_mints:
+                if m not in raw_mints:
+                    raw_mints.append(m)
+
         if not raw_mints:
+            log.warning("Scan: tidak ada mint dari semua sumber discovery")
             return []
+
+        log.info(f"Scan: total {len(raw_mints)} mint akan diperiksa")
+
         all_pairs = []
         for i in range(0, min(len(raw_mints), 90), 30):
             batch = raw_mints[i:i+30]
             pairs = await self.dex_tokens_batch(session, batch)
             if pairs:
                 all_pairs.extend(pairs)
+
+        log.info(f"Scan: {len(all_pairs)} pairs dari DexScreener batch")
+
         candidates = []
         seen = set()
         for pair in all_pairs:
-            if not isinstance(pair, dict) or pair.get("chainId") != "solana":
+            if not isinstance(pair, dict):
                 continue
+            # ── FIX: chainId bisa tidak ada kalau query ke /solana/ endpoint ──
+            chain = pair.get("chainId", "solana")
+            if chain and chain != "solana":
+                continue
+
             base = pair.get("baseToken") or {}
             mint = base.get("address", "")
             if not mint or len(mint) < 30 or mint in seen:
                 continue
-            mc = float(pair.get("marketCap") or pair.get("fdv") or 0)
-            liq = float((pair.get("liquidity") or {}).get("usd") or 0)
+
+            mc    = float(pair.get("marketCap") or pair.get("fdv") or 0)
+            liq   = float((pair.get("liquidity") or {}).get("usd") or 0)
             vol1h = float((pair.get("volume") or {}).get("h1") or 0)
+            vol5m = float((pair.get("volume") or {}).get("m5") or 0)
+            vol24h= float((pair.get("volume") or {}).get("h24") or 0)
             chg5m = float((pair.get("priceChange") or {}).get("m5") or 0)
-            dex_id = (pair.get("dexId") or "").lower().replace(".", "_").replace("-", "_")
-            if not (min_mc <= mc <= max_mc): continue
-            if liq < min_liq: continue
-            if vol1h < min_vol1h: continue
-            if not any(a in dex_id or dex_id in a for a in allowed_dex): continue
+            created_at = int(pair.get("pairCreatedAt") or 0)
+            age_h = ((datetime.now().timestamp() * 1000 - created_at) / 3_600_000
+                     if created_at else 99)
+
+            dex_raw = (pair.get("dexId") or "").lower()
+            dex_id  = dex_raw.replace(".", "_").replace("-", "_")
+
+            if not (min_mc <= mc <= max_mc):
+                continue
+            if liq < min_liq:
+                continue
+
+            # ── FIX: vol1h bisa 0 untuk token sangat fresh (< 1 jam) ──
+            # Gunakan volume efektif: h1 > m5*12 (extrapolasi) > h24/24
+            vol_effective = vol1h
+            if vol_effective < min_vol1h:
+                if age_h < 1.0 and vol5m > 0:
+                    vol_effective = vol5m * 12  # ekstrapolasi 1 jam dari 5 menit
+                elif vol24h > 0:
+                    vol_effective = vol24h / max(age_h, 1.0)
+            if vol_effective < min_vol1h * 0.3:  # threshold lebih longgar
+                continue
+
+            if allowed_dex:
+                matched = any(
+                    a == dex_id or a in dex_id or dex_id in a
+                    for a in allowed_dex
+                )
+                if not matched:
+                    log.debug(f"Skip dex {dex_id} (not in allowed_dex)")
+                    continue
+
             seen.add(mint)
             candidates.append((chg5m, mint))
+
         candidates.sort(key=lambda x: x[0], reverse=True)
+        log.info(f"Scan: {len(candidates)} kandidat lolos filter")
         return candidates[:max_results]
 
     # ── Fetch utama ─────────────────────────────────────
@@ -539,15 +628,55 @@ class DataFetcher:
                 except (ValueError, TypeError):
                     continue
 
-        # LP Burn dari RugCheck markets
+        # ── FIX: Top10 dari RugCheck topHolders (fallback jika GMGN/Helius tidak ada) ──
+        if t.top_holders and t.top10_pct == 0:
+            total_pct = 0.0
+            for h in t.top_holders[:10]:
+                pct_h = float(h.get("pct", 0) or 0)
+                if 0 < pct_h <= 1.0:
+                    pct_h *= 100
+                if 0 < pct_h <= 100:
+                    total_pct += pct_h
+            if 0 < total_pct <= 100:
+                t.top10_pct = round(total_pct, 1)
+                t.top10_source = "RugCheck"
+                log.info(f"RugCheck TOP10 {t.mint[:12]}: {t.top10_pct}%")
+
+        # ── FIX: LP Burn — deteksi lebih robust dari RugCheck markets ──
         for mkt in rc.get("markets") or []:
             lp = mkt.get("lp") or {}
-            pct = float(lp.get("lpLockedPct") or 0)
-            if pct > t.lp_burn:
-                t.lp_burn = pct
-            if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
+            # Cek berbagai field persentase
+            for pct_key in ("lpLockedPct", "lpBurnedPct", "burnedPercent", "burnPct", "lockedPct"):
+                raw_pct = lp.get(pct_key)
+                if raw_pct is not None:
+                    try:
+                        pct_val = float(raw_pct)
+                        if 0 < pct_val <= 1.0:
+                            pct_val *= 100
+                        if pct_val > t.lp_burn:
+                            t.lp_burn = pct_val
+                    except (ValueError, TypeError):
+                        pass
+            # Cek boolean burned
+            if (lp.get("lpBurned") or lp.get("burned") or
+                    lp.get("isBurned") or lp.get("burn")):
                 t.lp_burn = 100.0
                 t.gmgn_lp_burned = True
+            # Hitung dari supply: lpCurrentSupply == 0 berarti burned
+            try:
+                lp_c = lp.get("lpCurrentSupply")
+                lp_t = lp.get("lpTotalSupply")
+                if lp_c is not None and lp_t is not None:
+                    lp_c, lp_t = float(lp_c), float(lp_t)
+                    if lp_c == 0 and lp_t > 0:
+                        t.lp_burn = 100.0
+                        t.gmgn_lp_burned = True
+                    elif 0 < lp_c < lp_t:
+                        pct_supply = round((1 - lp_c / lp_t) * 100, 1)
+                        if pct_supply > t.lp_burn:
+                            t.lp_burn = pct_supply
+            except (ValueError, TypeError):
+                pass
 
         # Risk score
         raw = int(rc.get("score") or 0)
@@ -564,7 +693,7 @@ class DataFetcher:
 
     def _apply_gmgn_data(self, t: Token, data: dict) -> Token:
         t.gmgn_data = data
-        td = data.get("token") or data if isinstance(data, dict) else {}
+        td = self._unwrap_gmgn(data)
 
         for key in ("top_10_holder_pct", "top_10_holder_rate", "top10HolderPercent",
                     "top10_holder_rate", "topHolderRate"):
