@@ -6,7 +6,7 @@ Fixes:
   - SKIP_KEYWORDS tidak lagi memblok kata umum di signal legit
   - Logging lebih informatif saat connection gagal
 """
-import os, re, logging
+import asyncio, os, re, logging
 from typing import Callable
 from config import AgentConfig
 
