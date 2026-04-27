@@ -202,11 +202,11 @@ class PonyinAgent:
             await self.bot.send(format_log(records))
 
         elif command == "/scan":
+            cfg = self.cfg
             await self.bot.send(
-                "🔍 <b>Scanning dengan DexScreener filter...</b>\n"
-                "├ MC: <b>$5K – $50K</b>\n"
-                "├ Liq min: <b>$1K</b>\n"
-                "├ Vol 1H min: <b>$3K</b>\n"
+                "🔍 <b>Scanning...</b>\n"
+                f"├ MC: <b>${cfg.MIN_MC:,.0f} – ${cfg.MAX_MC:,.0f}</b>\n"
+                f"├ Liq min: <b>${cfg.MIN_LIQ:,.0f}</b>\n"
                 "├ DEX: <b>PumpFun / Raydium / Meteora</b>\n"
                 "└ Sort: <b>5M UP Trends ↑</b>"
             )
@@ -214,10 +214,10 @@ class PonyinAgent:
                 async with self.fetcher.session() as session:
                     filtered = await self.fetcher.get_filtered_scan_mints(
                         session,
-                        min_mc=5_000,
-                        max_mc=50_000,
-                        min_liq=1_000,
-                        min_vol1h=3_000,
+                        min_mc=cfg.MIN_MC,
+                        max_mc=cfg.MAX_MC,
+                        min_liq=cfg.MIN_LIQ,
+                        min_vol1h=1_000,    # intentionally loose, filter engine handle sisanya
                     )
 
                 if not filtered:

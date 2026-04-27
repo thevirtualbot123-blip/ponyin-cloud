@@ -176,18 +176,29 @@ class TelegramBot:
         return await self.send(msg)
 
     async def run(self):
-        """
-        Long-polling loop untuk terima command dari user.
-        FIX: sebelumnya ini stub `pass` — bot tidak pernah menerima command apapun!
-        """
+        """Long-polling loop. Fix: clear webhook dulu, handle 409 (instance ganda)."""
         if not self.token:
             log.warning("Bot token tidak ada — polling dinonaktifkan")
             return
 
         self._running = True
-        log.info("Bot polling started")
 
         import aiohttp
+
+        # ── Hapus webhook dulu (mencegah 409 conflict) ──
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"{self.base_url}/deleteWebhook",
+                    json={"drop_pending_updates": False},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as r:
+                    if r.status == 200:
+                        log.info("Bot polling started (webhook cleared)")
+                    else:
+                        log.warning(f"deleteWebhook returned {r.status}")
+        except Exception as e:
+            log.warning(f"deleteWebhook error (lanjut): {e}")
 
         while self._running:
             try:
@@ -195,15 +206,21 @@ class TelegramBot:
                     async with s.get(
                         f"{self.base_url}/getUpdates",
                         params={
-                            "offset":           self._offset,
-                            "timeout":          30,
-                            "allowed_updates":  json.dumps(["message"]),
+                            "offset":          self._offset,
+                            "timeout":         30,
+                            "allowed_updates": json.dumps(["message"]),
                         },
                         timeout=aiohttp.ClientTimeout(total=35),
                     ) as r:
                         if r.status == 401:
                             log.error("Bot token tidak valid!")
                             return
+                        if r.status == 409:
+                            # ── FIX: 409 = dua instance polling bersamaan ──
+                            # Railway restart: instance lama belum mati. Tunggu 30 detik.
+                            log.warning("Bot 409 conflict — instance lain masih polling. Tunggu 30 detik...")
+                            await asyncio.sleep(30)
+                            continue
                         if r.status != 200:
                             log.warning(f"getUpdates HTTP {r.status}")
                             await asyncio.sleep(5)
@@ -219,7 +236,6 @@ class TelegramBot:
                             chat  = str((msg.get("chat") or {}).get("id", ""))
                             from_ = str((msg.get("from") or {}).get("id", ""))
 
-                            # Keamanan: hanya respon ke chat yang diotorisasi
                             if self.chat_id and chat != self.chat_id and from_ != self.chat_id:
                                 log.debug(f"Ignored msg from unauthorized chat {chat}")
                                 continue
@@ -227,12 +243,10 @@ class TelegramBot:
                             if not text:
                                 continue
 
-                            # Parse command dan argumen
                             parts = text.split(None, 1)
                             cmd   = parts[0].lower()
                             args  = parts[1].strip() if len(parts) > 1 else ""
 
-                            # CA langsung (bukan command slash)
                             if (not text.startswith("/") and
                                     len(text) >= 32 and " " not in text):
                                 cmd, args = text, ""

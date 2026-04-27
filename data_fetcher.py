@@ -129,7 +129,71 @@ class DataFetcher:
 
         return None
 
+    async def gmgn_via_bridge(self, session, mint: str) -> Optional[dict]:
+        """
+        Ambil data GMGN via Node.js bridge (lebih andal, bypass Cloudflare).
+        Set env GMGN_BRIDGE_URL=http://localhost:3000 atau URL Railway service.
+        """
+        import os
+        bridge_url = os.getenv("GMGN_BRIDGE_URL", "").rstrip("/")
+        if not bridge_url:
+            return None
+        try:
+            data = await self._get(session, f"{bridge_url}/token/{mint}", timeout=10)
+            if not data:
+                return None
+            # Format: {"code":0,"data":{...}} atau langsung token dict
+            if isinstance(data, dict):
+                if data.get("code") == 0 and data.get("data"):
+                    return data["data"]
+                if "token" in data or "address" in data or "mint" in data:
+                    return data
+            return None
+        except Exception as e:
+            log.debug(f"GMGN bridge error {mint[:12]}: {e}")
+            return None
+
+    async def gmgn_new_tokens_via_bridge(self, session) -> List[str]:
+        """Discovery token baru via Node.js bridge."""
+        import os
+        bridge_url = os.getenv("GMGN_BRIDGE_URL", "").rstrip("/")
+        if not bridge_url:
+            return []
+        mints: List[str] = []
+        for endpoint in ("/new_tokens", "/pump_rank"):
+            try:
+                data = await self._get(session, f"{bridge_url}{endpoint}", timeout=10)
+                if not data:
+                    continue
+                items = None
+                if isinstance(data.get("data"), list):
+                    items = data["data"]
+                else:
+                    for key in ("rank", "tokens", "items", "list"):
+                        if isinstance(data.get(key), list):
+                            items = data[key]
+                            break
+                if items:
+                    for item in (items if isinstance(items, list) else []):
+                        addr = (item.get("address") or item.get("token_address")
+                                or item.get("mint") or "")
+                        if addr and len(addr) >= 32:
+                            mints.append(addr)
+            except Exception as e:
+                log.debug(f"GMGN bridge discovery error: {e}")
+        unique = list(dict.fromkeys(mints))
+        if unique:
+            log.info(f"GMGN bridge discovery: {len(unique)} tokens")
+        return unique[:60]
+
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
+        # Coba bridge dulu (lebih andal)
+        bridge_data = await self.gmgn_via_bridge(session, mint)
+        if bridge_data:
+            log.debug(f"GMGN via bridge OK: {mint[:12]}")
+            return bridge_data
+
+        # Fallback ke tls_client (sering diblok Cloudflare)
         endpoints = [
             {"url": "https://gmgn.ai/api/v1/mutil_window_token_info", "method": "POST",
              "payload": {"chain": "sol", "addresses": [mint]}},
@@ -260,47 +324,81 @@ class DataFetcher:
     def _calculate_top10_from_helius(self, t: Token, accounts: List[dict], supply_data: dict) -> Token:
         """
         Calculate REAL top10% from all Helius DAS accounts with owner dedup.
+
+        FIX KRITIS: Helius getTokenAccounts DAS TIDAK populate uiAmount per-account
+        (selalu 0). Kita harus pakai raw `amount` (integer string) dibagi 10^decimals
+        dari getTokenSupply.
         """
         if not accounts:
             return t
 
         supply_info = supply_data.get("value") if supply_data else {}
-        total_supply = float(supply_info.get("uiAmount", 0))
+
+        # Ambil decimals dari supply response
+        decimals = int(supply_info.get("decimals", 9))
+        divisor  = 10 ** decimals if decimals >= 0 else 1
+
+        # Total supply: coba uiAmount dulu, fallback ke raw amount / divisor
+        total_supply = float(supply_info.get("uiAmount") or 0)
+        if total_supply <= 0:
+            raw_supply = supply_info.get("amount", "0") or "0"
+            try:
+                total_supply = int(raw_supply) / divisor
+            except (ValueError, TypeError):
+                pass
 
         if total_supply <= 0:
-            log.warning(f"Helius supply zero for {t.mint[:12]}")
+            log.warning(f"Helius supply zero/missing for {t.mint[:12]} — skip top10 calc")
             return t
 
-        # Dedup by owner (handle multiple ATAs)
-        owner_totals = defaultdict(float)
+        SYSTEM_ADDRS = {
+            "11111111111111111111111111111111",
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+        }
+
+        # Dedup by owner, hitung dari raw amount (bukan uiAmount)
+        owner_totals: defaultdict = defaultdict(float)
+        zero_count = 0
         for acc in accounts:
             owner = acc.get("owner", "")
-            if not owner:
+            if not owner or owner in SYSTEM_ADDRS:
                 continue
-            # Skip known system/contract addresses
-            if owner in ("11111111111111111111111111111111",
-                         "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-                         "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"):
-                continue
-            owner_totals[owner] += acc.get("uiAmount", 0)
 
-        # Sort by total descending
+            # ── KUNCI FIX: pakai raw `amount` + divisor ──
+            ui = float(acc.get("uiAmount") or 0)
+            if ui == 0:
+                raw = acc.get("amount", "0") or "0"
+                try:
+                    ui = int(raw) / divisor
+                except (ValueError, TypeError):
+                    ui = 0
+                if ui == 0:
+                    zero_count += 1
+                    continue
+
+            owner_totals[owner] += ui
+
+        if zero_count > 0:
+            log.debug(f"Helius {t.mint[:12]}: {zero_count} accounts with zero balance skipped")
+
+        if not owner_totals:
+            log.warning(f"Helius: semua accounts zero balance untuk {t.mint[:12]}")
+            return t
+
         sorted_owners = sorted(owner_totals.items(), key=lambda x: x[1], reverse=True)
 
-        # Calculate top10%
-        top10_sum = sum(amount for _, amount in sorted_owners[:10])
+        top10_sum = sum(amt for _, amt in sorted_owners[:10])
         top10_pct = (top10_sum / total_supply) * 100
 
-        t.top10_pct = round(top10_pct, 1)
+        t.top10_pct    = round(min(top10_pct, 100.0), 1)
         t.top10_source = f"Helius({len(sorted_owners)} holders)"
-
-        # Update holder count (real deduped count)
         t.holder_count_gmgn = len(sorted_owners)
 
         log.info(
             f"Helius TOP10 {t.mint[:12]}: {t.top10_pct}% "
-            f"from {len(sorted_owners)} unique holders "
-            f"(top10_sum={top10_sum:.2f}, supply={total_supply:.2f})"
+            f"from {len(sorted_owners)} holders "
+            f"(top10_sum={top10_sum:,.0f}, supply={total_supply:,.0f}, decimals={decimals})"
         )
 
         return t
@@ -329,11 +427,12 @@ class DataFetcher:
 
     # ── Discovery ────────────────────────────────────────
     async def get_new_token_mints(self, session) -> List[str]:
-        profiles, boosted, rc_new, gmgn_new = await asyncio.gather(
+        profiles, boosted, rc_new, gmgn_new, bridge_new = await asyncio.gather(
             self.dex_latest_profiles(session),
             self.dex_boosted(session),
             self.rc_new_tokens(session),
             self.gmgn_new_tokens(session),
+            self.gmgn_new_tokens_via_bridge(session),
             return_exceptions=True,
         )
         mints = []
@@ -343,11 +442,14 @@ class DataFetcher:
                     m = item.get("tokenAddress") or item.get("mint") or ""
                     if m:
                         mints.append(m)
-        if isinstance(gmgn_new, list):
-            for m in gmgn_new:
-                if isinstance(m, str) and m:
-                    mints.append(m)
-        return list(dict.fromkeys(mints))[:100]
+        for src in (gmgn_new, bridge_new):
+            if isinstance(src, list):
+                for m in src:
+                    if isinstance(m, str) and m:
+                        mints.append(m)
+        unique = list(dict.fromkeys(mints))
+        log.info(f"Discovery total: {len(unique)} unique mints (profiles={len(profiles) if isinstance(profiles,list) else 0}, boosted={len(boosted) if isinstance(boosted,list) else 0}, rc={len(rc_new) if isinstance(rc_new,list) else 0})")
+        return unique[:100]
 
     async def dex_latest_profiles(self, session) -> list:
         d = await self._get(session, "https://api.dexscreener.com/token-profiles/latest/v1")
@@ -387,15 +489,15 @@ class DataFetcher:
         return unique[:60]
 
     async def get_filtered_scan_mints(
-        self, session, min_mc=5_000, max_mc=50_000,
-        min_liq=1_000, min_vol1h=3_000, allowed_dex=None, max_results=20
+        self, session, min_mc=5_000, max_mc=800_000,
+        min_liq=1_000, min_vol1h=1_000, allowed_dex=None, max_results=20
     ) -> List[Tuple[float, str]]:
         if allowed_dex is None:
             allowed_dex = {"pump_fun", "pumpfun", "pump.fun", "raydium", "meteora", "orca"}
 
         raw_mints = await self.get_new_token_mints(session)
 
-        # ── FIX: fallback ke DexSearch jika discovery utama gagal/sedikit ──
+        # Fallback ke DexSearch jika discovery sedikit
         if len(raw_mints) < 10:
             log.warning(f"Discovery hanya {len(raw_mints)} mint, coba DexSearch fallback")
             dex_mints = await self.dex_search_new_solana(session)
@@ -418,14 +520,17 @@ class DataFetcher:
 
         log.info(f"Scan: {len(all_pairs)} pairs dari DexScreener batch")
 
+        # ── Verbose rejection counter untuk debug ──
+        rej = {"chain": 0, "mc_low": 0, "mc_high": 0, "liq": 0, "vol": 0, "dex": 0}
         candidates = []
         seen = set()
+
         for pair in all_pairs:
             if not isinstance(pair, dict):
                 continue
-            # ── FIX: chainId bisa tidak ada kalau query ke /solana/ endpoint ──
             chain = pair.get("chainId", "solana")
             if chain and chain != "solana":
+                rej["chain"] += 1
                 continue
 
             base = pair.get("baseToken") or {}
@@ -433,49 +538,55 @@ class DataFetcher:
             if not mint or len(mint) < 30 or mint in seen:
                 continue
 
-            mc    = float(pair.get("marketCap") or pair.get("fdv") or 0)
-            liq   = float((pair.get("liquidity") or {}).get("usd") or 0)
-            vol1h = float((pair.get("volume") or {}).get("h1") or 0)
-            vol5m = float((pair.get("volume") or {}).get("m5") or 0)
-            vol24h= float((pair.get("volume") or {}).get("h24") or 0)
-            chg5m = float((pair.get("priceChange") or {}).get("m5") or 0)
+            mc     = float(pair.get("marketCap") or pair.get("fdv") or 0)
+            liq    = float((pair.get("liquidity") or {}).get("usd") or 0)
+            vol1h  = float((pair.get("volume") or {}).get("h1") or 0)
+            vol5m  = float((pair.get("volume") or {}).get("m5") or 0)
+            vol24h = float((pair.get("volume") or {}).get("h24") or 0)
+            chg5m  = float((pair.get("priceChange") or {}).get("m5") or 0)
             created_at = int(pair.get("pairCreatedAt") or 0)
-            age_h = ((datetime.now().timestamp() * 1000 - created_at) / 3_600_000
-                     if created_at else 99)
-
+            age_h  = ((datetime.now().timestamp() * 1000 - created_at) / 3_600_000
+                      if created_at else 99)
             dex_raw = (pair.get("dexId") or "").lower()
             dex_id  = dex_raw.replace(".", "_").replace("-", "_")
 
-            if not (min_mc <= mc <= max_mc):
+            if mc < min_mc:
+                rej["mc_low"] += 1
+                continue
+            if mc > max_mc:
+                rej["mc_high"] += 1
                 continue
             if liq < min_liq:
+                rej["liq"] += 1
                 continue
 
-            # ── FIX: vol1h bisa 0 untuk token sangat fresh (< 1 jam) ──
-            # Gunakan volume efektif: h1 > m5*12 (extrapolasi) > h24/24
-            vol_effective = vol1h
-            if vol_effective < min_vol1h:
+            # Volume: h1 > ekstrapolasi 5m > h24/age
+            vol_eff = vol1h
+            if vol_eff < min_vol1h:
                 if age_h < 1.0 and vol5m > 0:
-                    vol_effective = vol5m * 12  # ekstrapolasi 1 jam dari 5 menit
+                    vol_eff = vol5m * 12
                 elif vol24h > 0:
-                    vol_effective = vol24h / max(age_h, 1.0)
-            if vol_effective < min_vol1h * 0.3:  # threshold lebih longgar
+                    vol_eff = vol24h / max(age_h, 1.0)
+            if vol_eff < min_vol1h * 0.3:
+                rej["vol"] += 1
                 continue
 
             if allowed_dex:
-                matched = any(
-                    a == dex_id or a in dex_id or dex_id in a
-                    for a in allowed_dex
-                )
+                matched = any(a == dex_id or a in dex_id or dex_id in a for a in allowed_dex)
                 if not matched:
-                    log.debug(f"Skip dex {dex_id} (not in allowed_dex)")
+                    rej["dex"] += 1
+                    log.debug(f"Skip dex '{dex_id}' mint={mint[:12]} mc=${mc:,.0f}")
                     continue
 
             seen.add(mint)
             candidates.append((chg5m, mint))
 
+        log.info(
+            f"Scan filter result: {len(candidates)} lolos | "
+            f"Reject: chain={rej['chain']} mc_low={rej['mc_low']} mc_high={rej['mc_high']} "
+            f"liq={rej['liq']} vol={rej['vol']} dex={rej['dex']}"
+        )
         candidates.sort(key=lambda x: x[0], reverse=True)
-        log.info(f"Scan: {len(candidates)} kandidat lolos filter")
         return candidates[:max_results]
 
     # ── Fetch utama ─────────────────────────────────────

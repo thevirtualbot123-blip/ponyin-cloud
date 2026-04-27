@@ -100,8 +100,28 @@ class TelegramListener:
             else:
                 await self._client.start(phone=self.cfg.TG_PHONE)
         except Exception as e:
-            log.error(f"Telethon connection error: {e}")
-            return
+            err_str = str(e)
+            # ── FIX: AuthKeyDuplicated terjadi saat Railway restart + instance lama masih jalan ──
+            # Solusi: tunggu 60 detik lalu retry (old session akan timeout sendiri)
+            if "two different IP" in err_str or "AuthKeyDuplicated" in err_str or "authorization key" in err_str.lower():
+                log.warning(
+                    "AuthKeyDuplicated! Instance lain masih aktif. "
+                    "Tunggu 70 detik lalu retry..."
+                )
+                await asyncio.sleep(70)
+                try:
+                    self._client = TelegramClient(session, api_id, self.cfg.TG_API_HASH)
+                    await self._client.connect()
+                    if not await self._client.is_user_authorized():
+                        log.error("Retry: session tidak valid")
+                        return
+                    log.info("Retry berhasil — AuthKeyDuplicated cleared ✓")
+                except Exception as e2:
+                    log.error(f"Retry gagal: {e2}")
+                    return
+            else:
+                log.error(f"Telethon connection error: {e}")
+                return
 
         log.info("Telegram connected!")
 
