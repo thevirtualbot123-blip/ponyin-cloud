@@ -482,7 +482,9 @@ class DataFetcher:
             t.holder_count_gmgn = len(owners)
             log.info(f"Helius holder count update: {len(owners)} for {t.mint[:12]} "
                      f"(top10% kept from {t.top10_source}: {t.top10_pct}%)")
-        return t(self, session, mint: str) -> Optional[dict]:
+        return t
+
+    async def helius_get_token_supply(self, session, mint: str) -> Optional[dict]:
         if not self.cfg.HELIUS_API_KEY:
             return None
         payload = {
