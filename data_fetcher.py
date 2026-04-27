@@ -451,7 +451,38 @@ class DataFetcher:
 
         return t
 
-    async def helius_get_token_supply(self, session, mint: str) -> Optional[dict]:
+    def _update_holder_count_from_helius(self, t: Token, accounts: List[dict]) -> Token:
+        """
+        FIX v9: Update HANYA holder count dari Helius (bukan top10%).
+        Dipakai ketika GMGN sudah provide top10% yang akurat.
+        Helius dengan full pagination memberikan holder count paling akurat.
+        """
+        if not accounts:
+            return t
+        SYSTEM_ADDRS = {
+            "11111111111111111111111111111111",
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+            "1nc1nerator11111111111111111111111111111111",
+            "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+            "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+            "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+            "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+            "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
+            "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg",
+            "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkAW7cP",
+            "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        }
+        owners = set()
+        for acc in accounts:
+            owner = acc.get("owner", "")
+            if owner and owner not in SYSTEM_ADDRS:
+                owners.add(owner)
+        if owners:
+            t.holder_count_gmgn = len(owners)
+            log.info(f"Helius holder count update: {len(owners)} for {t.mint[:12]} "
+                     f"(top10% kept from {t.top10_source}: {t.top10_pct}%)")
+        return t(self, session, mint: str) -> Optional[dict]:
         if not self.cfg.HELIUS_API_KEY:
             return None
         payload = {
@@ -670,20 +701,30 @@ class DataFetcher:
                 log.warning(f"fetch_token: semua sumber gagal untuk {mint[:12]}")
                 return None
 
-        # Apply RugCheck (LP burn, security, risks)
-        if rc_raw:
-            token = self._apply_rugcheck(token, rc_raw)
-
-        # Apply GMGN (optional — smart money, bundle, sniper)
+        # ── Prioritas data: GMGN → RugCheck → Helius ──────────────
+        # GMGN: PRIMARY untuk top10%, smart money, sniper, bundle
+        # (bridge sudah jalan, data sudah difilter DEX vault oleh GMGN)
         if gmgn_raw:
             token = self._apply_gmgn_data(token, gmgn_raw)
 
-        # ── PRIMARY: Helius DAS for REAL top10% and holder count ──
+        # RugCheck: LP burn, mint/freeze auth, risk score, risks list
+        if rc_raw:
+            token = self._apply_rugcheck(token, rc_raw)
+
+        # Helius: gunakan untuk holder COUNT (paginasi akurat).
+        # Top10% dari Helius HANYA dipakai kalau GMGN tidak provide (bridge gagal).
         if self.cfg.HELIUS_API_KEY:
             helius_accounts = await self.helius_get_all_holders(session, mint)
             if helius_accounts:
                 helius_supply = await self.helius_get_token_supply(session, mint)
-                token = self._calculate_top10_from_helius(token, helius_accounts, helius_supply or {})
+                gmgn_has_top10 = token.top10_pct > 0 and token.top10_source == "GMGN"
+                if not gmgn_has_top10:
+                    # GMGN gagal — pakai Helius sebagai fallback top10
+                    token = self._calculate_top10_from_helius(
+                        token, helius_accounts, helius_supply or {})
+                else:
+                    # GMGN sudah ada — hanya update holder COUNT dari Helius (lebih akurat)
+                    token = self._update_holder_count_from_helius(token, helius_accounts)
 
         # Final validation
         log.info(
@@ -900,6 +941,9 @@ class DataFetcher:
         t.gmgn_data = data
         td = self._unwrap_gmgn(data)
 
+        # FIX v9: GMGN adalah sumber PRIMARY untuk top10% — selalu override.
+        # GMGN sudah memfilter DEX vault, burn address, dan LP pool sebelum menghitung.
+        # Hasilnya jauh lebih akurat dari kalkulasi raw on-chain (Helius/RugCheck).
         for key in ("top_10_holder_pct", "top_10_holder_rate", "top10HolderPercent",
                     "top10_holder_rate", "topHolderRate"):
             raw = td.get(key)
@@ -908,10 +952,9 @@ class DataFetcher:
                     v = float(raw)
                     if 0 < v <= 1.0: v *= 100
                     if 0 < v <= 100:
-                        # Hanya pakai GMGN kalau Helius tidak ada
-                        if t.top10_pct == 0:
-                            t.top10_pct = round(v, 1)
-                            t.top10_source = "GMGN"
+                        t.top10_pct    = round(v, 1)
+                        t.top10_source = "GMGN"
+                        log.info(f"GMGN top10 PRIMARY: {t.top10_pct}% for {t.mint[:12]}")
                 except (ValueError, TypeError):
                     pass
                 break
@@ -920,9 +963,7 @@ class DataFetcher:
             raw = td.get(key)
             if raw is not None:
                 try:
-                    # Hanya pakai GMGN kalau Helius tidak ada
-                    if t.holder_count_gmgn == 0:
-                        t.holder_count_gmgn = int(raw)
+                    t.holder_count_gmgn = int(raw)
                 except (ValueError, TypeError):
                     pass
                 break
