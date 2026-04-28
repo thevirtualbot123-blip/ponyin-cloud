@@ -36,7 +36,7 @@ class DataFetcher:
     def __init__(self, cfg=None):
         from config import AgentConfig
         self.cfg  = cfg or AgentConfig()
-        self.gmgn = GMGNClient(api_key=self.cfg.GMGN_API_KEY)
+        self.gmgn = GMGNClient(api_key=self.cfg.GMGN_API_KEY, proxy_url=self.cfg.GMGN_PROXY_URL)
 
     async def run_diagnostics(self):
         """Panggil saat startup untuk lihat status semua sumber data."""
@@ -108,7 +108,7 @@ class DataFetcher:
     # ── GMGN via curl-cffi langsung (tanpa bridge) ───────────────────
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         """curl-cffi bypass Cloudflare. session param dipertahankan utk compat."""
-        return await self.gmgn.token_info(mint)
+        return await .token_info(mint)
 
     async def gmgn_new_tokens(self, session) -> List[str]:
         return await self.gmgn.new_token_mints()
