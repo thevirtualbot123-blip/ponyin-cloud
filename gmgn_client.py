@@ -127,9 +127,11 @@ class GMGNClient:
             )
             if resp.status_code == 200:
                 return resp.json()
-            log.debug(f"GMGN GET {resp.status_code}: {url[:70]}")
+            log.warning(f"GMGN GET {resp.status_code}: {url[:70]}")
+        except ImportError:
+            log.warning("curl-cffi tidak terinstall — GMGN dinonaktifkan. pip install curl-cffi")
         except Exception as e:
-            log.debug(f"GMGN GET error {url[:60]}: {e}")
+            log.warning(f"GMGN GET error {url[:60]}: {e}")
         return None
 
     def _sync_post(self, url: str, payload: dict) -> Optional[dict]:
@@ -146,9 +148,11 @@ class GMGNClient:
             )
             if resp.status_code == 200:
                 return resp.json()
-            log.debug(f"GMGN POST {resp.status_code}: {url[:70]}")
+            log.warning(f"GMGN POST {resp.status_code}: {url[:70]}")
+        except ImportError:
+            log.warning("curl-cffi tidak terinstall — GMGN dinonaktifkan. pip install curl-cffi")
         except Exception as e:
-            log.debug(f"GMGN POST error {url[:60]}: {e}")
+            log.warning(f"GMGN POST error {url[:60]}: {e}")
         return None
 
     async def _get(self, url: str) -> Optional[dict]:
@@ -160,6 +164,33 @@ class GMGNClient:
         return await loop.run_in_executor(None, lambda: self._sync_post(url, payload))
 
     # ── Public API ───────────────────────────────────────────────────
+
+    async def diagnose(self) -> str:
+        """
+        Test koneksi GMGN dan return status string.
+        Panggil saat startup untuk tahu apakah GMGN bisa dipakai.
+        """
+        test_mint = "So11111111111111111111111111111111111111112"  # Wrapped SOL — selalu ada
+        try:
+            from curl_cffi import requests as cffi_requests  # noqa: F401
+        except ImportError:
+            return "❌ curl-cffi tidak terinstall (pip install curl-cffi)"
+
+        result = await self._get(f"{BASE}/defi/quotation/v1/token/sol/{test_mint}")
+        if result:
+            return "✅ GMGN OK — curl-cffi bypass berhasil"
+
+        result2 = await self._post(
+            f"{BASE}/api/v1/mutil_window_token_info",
+            {"chain": "sol", "addresses": [test_mint]}
+        )
+        if result2:
+            return "✅ GMGN OK via POST"
+
+        return (
+            "❌ GMGN GAGAL — kemungkinan Cloudflare memblok IP Railway/VPS.\n"
+            "   Solusi: pakai proxy (HTTPS_PROXY env), atau bot akan fallback ke RugCheck top10."
+        )
 
     async def token_info(self, mint: str) -> Optional[dict]:
         """
