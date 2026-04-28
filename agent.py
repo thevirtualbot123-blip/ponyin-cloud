@@ -436,6 +436,11 @@ class PonyinAgent:
                 self.tg_listener.run(), name="tg_listener"))
 
         print(f"\n{G}{B}🚀 AGENT AKTIF{R}\n")
+        # Diagnosa sumber data saat startup
+        try:
+            await self.fetcher.run_diagnostics()
+        except Exception as e:
+            log.warning(f"Diagnostics error (non-fatal): {e}")
         try:
             await asyncio.gather(*tasks)
         except SystemExit:
