@@ -1,4 +1,7 @@
-"""config.py — Konfigurasi PONYIN AI AGENT v7.0"""
+"""
+config.py — Konfigurasi PONYIN AI AGENT v7.1
+Tambahan: GMGN_PROXY_URL
+"""
 import os
 from dataclasses import dataclass
 
@@ -58,5 +61,4 @@ class AgentConfig:
 
     # ── GMGN API (pribadi) ────────────────────────────────
     GMGN_API_KEY: str = os.getenv("GMGN_API_KEY", "")
-    # Di bawah GMGN_API_KEY
     GMGN_PROXY_URL: str = os.getenv("GMGN_PROXY_URL", "")
