@@ -58,3 +58,5 @@ class AgentConfig:
 
     # ── GMGN API (pribadi) ────────────────────────────────
     GMGN_API_KEY: str = os.getenv("GMGN_API_KEY", "")
+    # Di bawah GMGN_API_KEY
+    GMGN_PROXY_URL: str = os.getenv("GMGN_PROXY_URL", "")
