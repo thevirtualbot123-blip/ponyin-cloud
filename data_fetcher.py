@@ -38,6 +38,20 @@ class DataFetcher:
         self.cfg  = cfg or AgentConfig()
         self.gmgn = GMGNClient(api_key=self.cfg.GMGN_API_KEY)
 
+    async def run_diagnostics(self):
+        """Panggil saat startup untuk lihat status semua sumber data."""
+        gmgn_status = await self.gmgn.diagnose()
+        helius_ok   = bool(self.cfg.HELIUS_API_KEY)
+        log.info(
+            f"\n{'='*55}\n"
+            f"  DATA SOURCE STATUS\n"
+            f"  GMGN   : {gmgn_status}\n"
+            f"  Helius : {'✅ Key tersedia' if helius_ok else '❌ HELIUS_API_KEY kosong'}\n"
+            f"  Top10 priority: GMGN → RugCheck → {'Helius' if helius_ok else 'N/A (tidak akurat)'}\n"
+            f"{'='*55}"
+        )
+        return gmgn_status
+
     @asynccontextmanager
     async def session(self):
         async with aiohttp.ClientSession(
@@ -418,12 +432,18 @@ class DataFetcher:
         if self.cfg.HELIUS_API_KEY:
             helius_accounts = await self.helius_get_all_holders(session, mint)
             if helius_accounts:
-                helius_supply  = await self.helius_get_token_supply(session, mint)
-                gmgn_has_top10 = token.top10_pct > 0 and token.top10_source == "GMGN"
-                if not gmgn_has_top10:
+                helius_supply = await self.helius_get_token_supply(session, mint)
+                # Helius hanya kalkulasi top10 jika TIDAK ADA sumber yang lebih akurat.
+                # Prioritas: GMGN > RugCheck > Helius
+                # Helius tetap dipakai untuk holder count (lebih akurat dari RC).
+                already_has_top10 = token.top10_pct > 0 and token.top10_source in ("GMGN", "RugCheck")
+                if not already_has_top10:
                     token = self._calculate_top10_from_helius(token, helius_accounts, helius_supply or {})
+                    log.info(f"Helius TOP10 dipakai (GMGN+RC gagal): {token.top10_pct:.1f}% {mint[:12]}")
                 else:
+                    # Helius hanya untuk holder count — jangan timpa top10
                     token = self._update_holder_count_from_helius(token, helius_accounts)
+                    log.info(f"Helius holder count saja (top10 dari {token.top10_source}): {mint[:12]}")
 
         log.info(
             f"Final {mint[:12]}: MC=${token.mc:,.0f} | "
