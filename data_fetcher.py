@@ -108,7 +108,7 @@ class DataFetcher:
     # ── GMGN via curl-cffi langsung (tanpa bridge) ───────────────────
     async def gmgn_token_info(self, session, mint: str) -> Optional[dict]:
         """curl-cffi bypass Cloudflare. session param dipertahankan utk compat."""
-        return await .token_info(mint)
+        return await self.gmgn.token_info(mint)
 
     async def gmgn_new_tokens(self, session) -> List[str]:
         return await self.gmgn.new_token_mints()
