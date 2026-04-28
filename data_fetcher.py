@@ -617,8 +617,20 @@ class DataFetcher:
         # DEBUG: log semua key yang ada di GMGN response
         log.info(f"GMGN keys for {t.mint[:12]}: {list(td.keys())[:30]}")
 
-        # TOP10% — GMGN primary, override lainnya
+        # GMGN v2 format: top10 bisa di nested 'dev' atau 'pool' object
+        dev_data = td.get("dev") or {}
+        pool_data = td.get("pool") or {}
+
+        # DEBUG: log nested keys
+        if dev_data:
+            log.info(f"GMGN dev keys for {t.mint[:12]}: {list(dev_data.keys())[:20]}")
+        if pool_data:
+            log.info(f"GMGN pool keys for {t.mint[:12]}: {list(pool_data.keys())[:20]}")
+
+        # TOP10% — coba dari berbagai lokasi
         top10_found = False
+
+        # 1. Coba dari root level (format lama)
         for key in ("top_10_holder_pct","top_10_holder_rate","top10HolderPercent",
                     "top10_holder_rate","topHolderRate", "top_10_holder_percent",
                     "top10_holder_percent", "top_holder_rate", "top10_pct"):
@@ -631,13 +643,51 @@ class DataFetcher:
                         t.top10_pct    = round(v, 1)
                         t.top10_source = "GMGN"
                         top10_found = True
-                        log.info(f"GMGN top10: {t.top10_pct}% for {t.mint[:12]} (key={key})")
+                        log.info(f"GMGN top10 (root): {t.top10_pct}% for {t.mint[:12]} (key={key})")
                 except Exception as e:
                     log.debug(f"GMGN top10 parse error: {e}")
                 break
 
+        # 2. Coba dari dev object (format baru)
+        if not top10_found and dev_data:
+            for key in ("top_10_holder_rate", "top10_holder_rate", "topHolderRate",
+                        "top_10_holder_pct", "holder_rate", "top10_pct"):
+                raw = dev_data.get(key)
+                if raw is not None:
+                    try:
+                        v = float(raw)
+                        if 0 < v <= 1.0: v *= 100
+                        if 0 < v <= 100:
+                            t.top10_pct    = round(v, 1)
+                            t.top10_source = "GMGN"
+                            top10_found = True
+                            log.info(f"GMGN top10 (dev): {t.top10_pct}% for {t.mint[:12]} (key={key})")
+                    except Exception as e:
+                        log.debug(f"GMGN top10 dev parse error: {e}")
+                    break
+
+        # 3. Coba dari pool object
+        if not top10_found and pool_data:
+            for key in ("top_10_holder_rate", "top10_holder_rate", "topHolderRate"):
+                raw = pool_data.get(key)
+                if raw is not None:
+                    try:
+                        v = float(raw)
+                        if 0 < v <= 1.0: v *= 100
+                        if 0 < v <= 100:
+                            t.top10_pct    = round(v, 1)
+                            t.top10_source = "GMGN"
+                            top10_found = True
+                            log.info(f"GMGN top10 (pool): {t.top10_pct}% for {t.mint[:12]} (key={key})")
+                    except Exception as e:
+                        log.debug(f"GMGN top10 pool parse error: {e}")
+                    break
+
         if not top10_found:
-            log.warning(f"GMGN top10 NOT FOUND for {t.mint[:12]}. Available keys: {list(td.keys())[:30]}")
+            log.warning(f"GMGN top10 NOT FOUND for {t.mint[:12]}. "
+                       f"Root keys: {list(td.keys())[:15]} | "
+                       f"Dev keys: {list(dev_data.keys())[:15] if dev_data else 'N/A'} | "
+                       f"Pool keys: {list(pool_data.keys())[:15] if pool_data else 'N/A'}")
 
         # holder_count
         for key in ("holder_count","holder","holderCount","holders","holder_num"):
@@ -649,7 +699,16 @@ class DataFetcher:
                 except: pass
                 break
 
-        t.dev_hold_pct      = float(td.get("dev_hold_pct")          or td.get("dev_holding_pct")      or 0)
+        # dev_hold_pct dari dev object
+        if dev_data:
+            dev_hold = dev_data.get("hold") or dev_data.get("hold_pct") or dev_data.get("holding_pct")
+            if dev_hold is not None:
+                try:
+                    t.dev_hold_pct = float(dev_hold)
+                    if 0 < t.dev_hold_pct <= 1.0: t.dev_hold_pct *= 100
+                    log.info(f"GMGN dev_hold: {t.dev_hold_pct:.1f}% for {t.mint[:12]}")
+                except: pass
+
         t.bundle_pct        = float(td.get("bundle_pct")             or td.get("bundler_pct")           or 0)
         t.sniper_count      = int(td.get("sniper_count")             or td.get("sniperCount")           or 0)
         t.smart_money_count = int(td.get("smart_degen_count")        or td.get("smartDegenCount")       or 0)
