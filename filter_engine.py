@@ -1,6 +1,7 @@
 """
-filter_engine.py — PONYIN AI AGENT v7.5 FINAL
+filter_engine.py — PONYIN AI AGENT v7.6 FINAL
 Fixes:
+  - JANGAN override top10 kalau sudah dari GMGN
   - Complete apply_filters (no truncation)
   - Heuristic fallbacks for bundle, smart money, sniper detection
   - holder_count priority: Helius DAS > GMGN > RugCheck
@@ -237,21 +238,26 @@ class FilterEngine:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
 
-        # FIX v9: GMGN selalu override top10 — sudah difilter DEX vault oleh GMGN
-        for key in ("top_10_holder_pct", "top_10_holder_rate",
-                    "top10HolderPercent", "top10_holder_rate",
-                    "topHolderRate", "top_10_holder_percent"):
-            raw = td.get(key)
-            if raw is not None:
-                try:
-                    v = float(raw)
-                    if 0 < v <= 1.0: v *= 100
-                    if 0 < v <= 100:
-                        t.top10_pct    = round(v, 1)
-                        t.top10_source = "GMGN"
-                except (ValueError, TypeError):
-                    pass
-                break
+        # FIX v7.6: JANGAN override top10 kalau sudah dari GMGN
+        if t.top10_source == "GMGN" and t.top10_pct > 0:
+            log.info(f"Filter skipped top10 override — GMGN already set: {t.top10_pct}%")
+        else:
+            # Coba ambil top10 dari GMGN data
+            for key in ("top_10_holder_pct", "top_10_holder_rate",
+                        "top10HolderPercent", "top10_holder_rate",
+                        "topHolderRate", "top_10_holder_percent"):
+                raw = td.get(key)
+                if raw is not None:
+                    try:
+                        v = float(raw)
+                        if 0 < v <= 1.0: v *= 100
+                        if 0 < v <= 100:
+                            t.top10_pct    = round(v, 1)
+                            t.top10_source = "GMGN"
+                            log.info(f"Filter GMGN top10: {t.top10_pct}% for {t.mint[:12]}")
+                    except (ValueError, TypeError):
+                        pass
+                    break
 
         if not t.holder_count_gmgn:
             for key in ("holder_count", "holder", "holderCount",
@@ -658,10 +664,15 @@ class FilterEngine:
         # S3 Top10 dengan label sumber data
         if t.top10_pct == 0:
             info("S3 Top10", f"N/A ({t.top10_source})", "Cek manual di GMGN/Helius")
+        elif "GMGN" in t.top10_source:
+            # GMGN data paling trusted
+            if t.top10_pct > cfg.MAX_TOP10_PCT:
+                bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT:.0f}% — CABAL/BUNDLE [GMGN REAL]", f"{t.top10_pct:.1f}%")
+            elif t.top10_pct > 40:
+                info("S3 Top10", f"{t.top10_pct:.1f}% agak tinggi [GMGN — cek BubbleMaps]", f"{t.top10_pct:.1f}% ⚠")
+            else:
+                ok("S3 Top10", f"{t.top10_pct:.1f}% ({t.top10_source})", "Sehat ✓")
         elif "Helius" in t.top10_source:
-            # FIX v8: gunakan cfg.MAX_TOP10_PCT (default 55) bukan hardcoded 30%
-            # Helius lebih akurat dari RugCheck, tapi 30-55% pada token baru adalah normal
-            # hanya flag jika benar-benar di atas threshold config
             if t.top10_pct > cfg.MAX_TOP10_PCT:
                 bad("S3 Top10", f"{t.top10_pct:.1f}% > {cfg.MAX_TOP10_PCT:.0f}% — CABAL/BUNDLE [Helius REAL]", f"{t.top10_pct:.1f}%")
             elif t.top10_pct > 40:
@@ -765,7 +776,7 @@ class FilterEngine:
         else:          info("Momentum", f"{ms}/100", f"Bearish — {t.chg1h:+.1f}%")
 
         if t.smart_money_present:
-            ok("Smart Money", f"{t.smart_money_pct:.1f}%", "GAKE hold ✓")  # perbaiki tulisan yang terputus
+            ok("Smart Money", f"{t.smart_money_pct:.1f}%", "GAKE hold ✓")
 
         total_tx = t.buys1h + t.sells1h
         if total_tx > 0:
