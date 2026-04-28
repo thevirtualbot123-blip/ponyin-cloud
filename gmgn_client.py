@@ -1,6 +1,6 @@
 """
-gmgn_client.py — PONYIN GMGN Client v2.1
-Debug mode: log semua request/response untuk tracing.
+gmgn_client.py — PONYIN GMGN Client v2.2 FINAL
+Debug mode + Auto-fix URL + Retry all methods.
 """
 import asyncio
 import logging
@@ -23,9 +23,11 @@ _IMPERSONATE_POOL = ["chrome124", "chrome123", "chrome120", "chrome110", "chrome
 class GMGNClient:
     def __init__(self, api_key: str = "", proxy_url: str = ""):
         self.api_key = api_key
+        # Auto-fix: tambah https:// kalau tidak ada scheme
+        if proxy_url and not proxy_url.startswith(("http://", "https://")):
+            proxy_url = "https://" + proxy_url
         self.proxy_url = proxy_url.rstrip("/") if proxy_url else ""
         self._use_proxy = bool(self.proxy_url)
-        self._direct_failed = False
 
     # ── Headers ──────────────────────────────────────────────────────
     def _make_headers(self) -> dict:
@@ -94,27 +96,29 @@ class GMGNClient:
         url = f"{self.proxy_url}?path={path}"
         if query:
             url += f"&{query}"
-        log.info(f"GMGN proxy GET: {url[:90]}")
+        log.info(f"GMGN proxy GET: {url[:100]}")
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.get(url, timeout=aiohttp.ClientTimeout(total=20)) as r:
                     text = await r.text()
-                    log.info(f"GMGN proxy status: {r.status} | len={len(text)}")
+                    log.info(f"GMGN proxy GET status: {r.status} | len={len(text)}")
                     if r.status == 200:
                         try:
                             return json.loads(text)
                         except json.JSONDecodeError:
-                            log.warning(f"GMGN proxy invalid JSON: {text[:200]}")
+                            log.warning(f"GMGN proxy GET invalid JSON: {text[:200]}")
                             return None
                     log.warning(f"GMGN proxy GET {r.status}: {text[:200]}")
+        except asyncio.TimeoutError:
+            log.warning(f"GMGN proxy GET timeout: {url[:80]}")
         except Exception as e:
-            log.warning(f"GMGN proxy GET error {path[:50]}: {e}")
+            log.warning(f"GMGN proxy GET error {path[:50]}: {type(e).__name__}: {e}")
         return None
 
     async def _post_proxy(self, path: str, payload: dict) -> Optional[dict]:
         import aiohttp
         url = f"{self.proxy_url}?path={path}"
-        log.info(f"GMGN proxy POST: {url[:90]}")
+        log.info(f"GMGN proxy POST: {url[:100]}")
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.post(
@@ -123,16 +127,18 @@ class GMGNClient:
                     timeout=aiohttp.ClientTimeout(total=20)
                 ) as r:
                     text = await r.text()
-                    log.info(f"GMGN proxy status: {r.status} | len={len(text)}")
+                    log.info(f"GMGN proxy POST status: {r.status} | len={len(text)}")
                     if r.status == 200:
                         try:
                             return json.loads(text)
                         except json.JSONDecodeError:
-                            log.warning(f"GMGN proxy invalid JSON: {text[:200]}")
+                            log.warning(f"GMGN proxy POST invalid JSON: {text[:200]}")
                             return None
                     log.warning(f"GMGN proxy POST {r.status}: {text[:200]}")
+        except asyncio.TimeoutError:
+            log.warning(f"GMGN proxy POST timeout: {url[:80]}")
         except Exception as e:
-            log.warning(f"GMGN proxy POST error {path[:50]}: {e}")
+            log.warning(f"GMGN proxy POST error {path[:50]}: {type(e).__name__}: {e}")
         return None
 
     # ── Public API dengan retry ─────────────────────────────────────
@@ -160,31 +166,30 @@ class GMGNClient:
                         return extracted
 
         # Try 3: Direct curl-cffi (fallback)
-        if not self._direct_failed:
-            loop = asyncio.get_event_loop()
+        loop = asyncio.get_event_loop()
+        raw = await loop.run_in_executor(
+            None,
+            lambda: self._sync_post_direct(
+                f"{BASE}/api/v1/mutil_window_token_info",
+                {"chain": "sol", "addresses": [mint]}
+            )
+        )
+        if raw:
+            extracted = self._extract_token_from_post(raw, mint)
+            if extracted:
+                log.info(f"GMGN direct POST OK: {mint[:12]}")
+                return extracted
+
+        for path in ["/defi/quotation/v1/token/sol/", "/defi/quotation/v1/tokens/sol/"]:
             raw = await loop.run_in_executor(
                 None,
-                lambda: self._sync_post_direct(
-                    f"{BASE}/api/v1/mutil_window_token_info",
-                    {"chain": "sol", "addresses": [mint]}
-                )
+                lambda: self._sync_get_direct(f"{BASE}{path}{mint}")
             )
             if raw:
-                extracted = self._extract_token_from_post(raw, mint)
+                extracted = self._extract_token_from_get(raw, mint)
                 if extracted:
-                    log.info(f"GMGN direct POST OK: {mint[:12]}")
+                    log.info(f"GMGN direct GET OK: {mint[:12]}")
                     return extracted
-
-            for path in ["/defi/quotation/v1/token/sol/", "/defi/quotation/v1/tokens/sol/"]:
-                raw = await loop.run_in_executor(
-                    None,
-                    lambda: self._sync_get_direct(f"{BASE}{path}{mint}")
-                )
-                if raw:
-                    extracted = self._extract_token_from_get(raw, mint)
-                    if extracted:
-                        log.info(f"GMGN direct GET OK: {mint[:12]}")
-                        return extracted
 
         log.warning(f"GMGN: ALL methods failed for {mint[:12]}")
         return None
