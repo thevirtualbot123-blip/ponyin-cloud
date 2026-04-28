@@ -1,11 +1,12 @@
 """
-data_fetcher.py — PONYIN AI AGENT v8.0
-=======================================
-Perubahan dari v7.5:
+data_fetcher.py — PONYIN AI AGENT v8.1
+Fixes:
+  - GMGN top10 parsing dari proxy response (format beda dari direct)
+  - Debug logging untuk semua GMGN keys
+  - Jangan override GMGN top10 dengan RugCheck/Helius
   - HAPUS gmgn_via_bridge (Node.js bridge tidak diperlukan)
   - HAPUS _gmgn_fetch (tls_client tidak reliable di Railway)
-  - GANTI dengan GMGNClient (curl-cffi, Chromium TLS fingerprint)
-  - gmgn_new_tokens_via_bridge -> return [] (backward compat)
+  - GANTI dengan GMGNClient (curl-cffi + proxy support)
 
 Requirements baru di requirements.txt:
     curl-cffi>=0.6.0
@@ -13,6 +14,7 @@ Requirements baru di requirements.txt:
 
 ENV Railway:
     GMGN_API_KEY=your_key_here
+    GMGN_PROXY_URL=https://your-worker.workers.dev
     (Hapus GMGN_BRIDGE_URL — tidak dipakai lagi)
 """
 import asyncio, aiohttp, logging, re
@@ -36,21 +38,7 @@ class DataFetcher:
     def __init__(self, cfg=None):
         from config import AgentConfig
         self.cfg  = cfg or AgentConfig()
-        self.gmgn = GMGNClient(api_key=self.cfg.GMGN_API_KEY, proxy_url=self.cfg.GMGN_PROXY_URL)
-
-    async def run_diagnostics(self):
-        """Panggil saat startup untuk lihat status semua sumber data."""
-        gmgn_status = await self.gmgn.diagnose()
-        helius_ok   = bool(self.cfg.HELIUS_API_KEY)
-        log.info(
-            f"\n{'='*55}\n"
-            f"  DATA SOURCE STATUS\n"
-            f"  GMGN   : {gmgn_status}\n"
-            f"  Helius : {'✅ Key tersedia' if helius_ok else '❌ HELIUS_API_KEY kosong'}\n"
-            f"  Top10 priority: GMGN → RugCheck → {'Helius' if helius_ok else 'N/A (tidak akurat)'}\n"
-            f"{'='*55}"
-        )
-        return gmgn_status
+        self.gmgn = GMGNClient(api_key=self.cfg.GMGN_API_KEY, proxy_url=getattr(self.cfg, 'GMGN_PROXY_URL', ''))
 
     @asynccontextmanager
     async def session(self):
@@ -234,6 +222,12 @@ class DataFetcher:
         sorted_owners = sorted(owner_totals.items(), key=lambda x: x[1], reverse=True)
         top10_sum     = sum(amt for _, amt in sorted_owners[:10])
         top10_pct     = (top10_sum / total_supply) * 100
+
+        # FIX v8.1: JANGAN override kalau sudah ada GMGN data
+        if t.top10_source == "GMGN" and t.top10_pct > 0:
+            log.info(f"Helius skipped — GMGN top10 already set: {t.top10_pct}%")
+            t.holder_count_gmgn = len(sorted_owners)
+            return t
 
         t.top10_pct           = round(min(top10_pct, 100.0), 1)
         t.top10_source        = f"Helius({len(sorted_owners)}h)"
@@ -432,18 +426,12 @@ class DataFetcher:
         if self.cfg.HELIUS_API_KEY:
             helius_accounts = await self.helius_get_all_holders(session, mint)
             if helius_accounts:
-                helius_supply = await self.helius_get_token_supply(session, mint)
-                # Helius hanya kalkulasi top10 jika TIDAK ADA sumber yang lebih akurat.
-                # Prioritas: GMGN > RugCheck > Helius
-                # Helius tetap dipakai untuk holder count (lebih akurat dari RC).
-                already_has_top10 = token.top10_pct > 0 and token.top10_source in ("GMGN", "RugCheck")
-                if not already_has_top10:
+                helius_supply  = await self.helius_get_token_supply(session, mint)
+                gmgn_has_top10 = token.top10_pct > 0 and token.top10_source == "GMGN"
+                if not gmgn_has_top10:
                     token = self._calculate_top10_from_helius(token, helius_accounts, helius_supply or {})
-                    log.info(f"Helius TOP10 dipakai (GMGN+RC gagal): {token.top10_pct:.1f}% {mint[:12]}")
                 else:
-                    # Helius hanya untuk holder count — jangan timpa top10
                     token = self._update_holder_count_from_helius(token, helius_accounts)
-                    log.info(f"Helius holder count saja (top10 dari {token.top10_source}): {mint[:12]}")
 
         log.info(
             f"Final {mint[:12]}: MC=${token.mc:,.0f} | "
@@ -567,7 +555,10 @@ class DataFetcher:
                 try: t.holder_count_rc = int(val); break
                 except: continue
 
-        if t.top_holders and t.top10_pct == 0:
+        # FIX v8.1: JANGAN override top10 kalau sudah dari GMGN
+        if t.top10_source == "GMGN" and t.top10_pct > 0:
+            log.info(f"RugCheck top10 skipped — GMGN already set: {t.top10_pct}%")
+        elif t.top_holders and t.top10_pct == 0:
             total_pct = 0.0
             for h in t.top_holders[:10]:
                 pct_h = float(h.get("pct", 0) or 0)
@@ -623,9 +614,14 @@ class DataFetcher:
         t.gmgn_data = data
         td = self._unwrap_gmgn(data)
 
+        # DEBUG: log semua key yang ada di GMGN response
+        log.info(f"GMGN keys for {t.mint[:12]}: {list(td.keys())[:30]}")
+
         # TOP10% — GMGN primary, override lainnya
+        top10_found = False
         for key in ("top_10_holder_pct","top_10_holder_rate","top10HolderPercent",
-                    "top10_holder_rate","topHolderRate"):
+                    "top10_holder_rate","topHolderRate", "top_10_holder_percent",
+                    "top10_holder_percent", "top_holder_rate", "top10_pct"):
             raw = td.get(key)
             if raw is not None:
                 try:
@@ -634,14 +630,22 @@ class DataFetcher:
                     if 0 < v <= 100:
                         t.top10_pct    = round(v, 1)
                         t.top10_source = "GMGN"
-                        log.info(f"GMGN top10: {t.top10_pct}% for {t.mint[:12]}")
-                except: pass
+                        top10_found = True
+                        log.info(f"GMGN top10: {t.top10_pct}% for {t.mint[:12]} (key={key})")
+                except Exception as e:
+                    log.debug(f"GMGN top10 parse error: {e}")
                 break
 
+        if not top10_found:
+            log.warning(f"GMGN top10 NOT FOUND for {t.mint[:12]}. Available keys: {list(td.keys())[:30]}")
+
+        # holder_count
         for key in ("holder_count","holder","holderCount","holders","holder_num"):
             raw = td.get(key)
             if raw is not None:
-                try: t.holder_count_gmgn = int(raw)
+                try: 
+                    t.holder_count_gmgn = int(raw)
+                    log.info(f"GMGN holders: {t.holder_count_gmgn} for {t.mint[:12]} (key={key})")
                 except: pass
                 break
 
@@ -655,6 +659,12 @@ class DataFetcher:
         t.wash_trade_gmgn   = bool(td.get("wash_trade_flag")         or td.get("is_wash_trading"))
         t.fresh_wallet_rate = float(td.get("fresh_wallet_rate")      or td.get("freshWalletRate")       or 0)
         t.rat_trader_rate   = float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate")         or 0)
+
+        # LP burn dari GMGN
+        if td.get("lp_burned") or td.get("is_lp_burned") or td.get("burned"):
+            t.lp_burn = 100.0
+            t.gmgn_lp_burned = True
+            log.info(f"GMGN LP burned: 100% for {t.mint[:12]}")
 
         if t.smart_money_count > 0:
             t.smart_money_present = True
