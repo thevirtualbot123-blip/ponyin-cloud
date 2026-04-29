@@ -223,7 +223,7 @@ class DataFetcher:
         top10_sum     = sum(amt for _, amt in sorted_owners[:10])
         top10_pct     = (top10_sum / total_supply) * 100
 
-        # FIX v8.1: JANGAN override kalau sudah ada GMGN data
+        # FIX v8.2: JANGAN override kalau sudah ada GMGN data
         if t.top10_source == "GMGN" and t.top10_pct > 0:
             log.info(f"Helius skipped — GMGN top10 already set: {t.top10_pct}%")
             t.holder_count_gmgn = len(sorted_owners)
@@ -555,7 +555,7 @@ class DataFetcher:
                 try: t.holder_count_rc = int(val); break
                 except: continue
 
-        # FIX v8.1: JANGAN override top10 kalau sudah dari GMGN
+        # FIX v8.2: JANGAN override top10 kalau sudah dari GMGN
         if t.top10_source == "GMGN" and t.top10_pct > 0:
             log.info(f"RugCheck top10 skipped — GMGN already set: {t.top10_pct}%")
         elif t.top_holders and t.top10_pct == 0:
@@ -568,29 +568,33 @@ class DataFetcher:
                 t.top10_pct    = round(total_pct, 1)
                 t.top10_source = "RugCheck"
 
-        for mkt in rc.get("markets") or []:
-            lp = mkt.get("lp") or {}
-            for pct_key in ("lpLockedPct","lpBurnedPct","burnedPercent","burnPct","lockedPct"):
-                raw_pct = lp.get(pct_key)
-                if raw_pct is not None:
-                    try:
-                        pct_val = float(raw_pct)
-                        if 0 < pct_val <= 1.0: pct_val *= 100
-                        if pct_val > t.lp_burn: t.lp_burn = pct_val
-                    except: pass
-            if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
-                t.lp_burn = 100.0; t.gmgn_lp_burned = True
-            try:
-                lp_c = lp.get("lpCurrentSupply")
-                lp_t = lp.get("lpTotalSupply")
-                if lp_c is not None and lp_t is not None:
-                    lp_c, lp_t = float(lp_c), float(lp_t)
-                    if lp_c == 0 and lp_t > 0:
-                        t.lp_burn = 100.0; t.gmgn_lp_burned = True
-                    elif 0 < lp_c < lp_t:
-                        pct_supply = round((1 - lp_c/lp_t)*100, 1)
-                        if pct_supply > t.lp_burn: t.lp_burn = pct_supply
-            except: pass
+        # FIX v8.2: JANGAN override lp_burn kalau sudah dari GMGN
+        if t.gmgn_lp_burned or (t.lp_burn >= 95 and t.top10_source == "GMGN"):
+            log.info(f"RugCheck LP skipped — GMGN already set: {t.lp_burn:.0f}%")
+        else:
+            for mkt in rc.get("markets") or []:
+                lp = mkt.get("lp") or {}
+                for pct_key in ("lpLockedPct","lpBurnedPct","burnedPercent","burnPct","lockedPct"):
+                    raw_pct = lp.get(pct_key)
+                    if raw_pct is not None:
+                        try:
+                            pct_val = float(raw_pct)
+                            if 0 < pct_val <= 1.0: pct_val *= 100
+                            if pct_val > t.lp_burn: t.lp_burn = pct_val
+                        except: pass
+                if lp.get("lpBurned") or lp.get("burned") or lp.get("isBurned") or lp.get("burn"):
+                    t.lp_burn = 100.0; t.gmgn_lp_burned = True
+                try:
+                    lp_c = lp.get("lpCurrentSupply")
+                    lp_t = lp.get("lpTotalSupply")
+                    if lp_c is not None and lp_t is not None:
+                        lp_c, lp_t = float(lp_c), float(lp_t)
+                        if lp_c == 0 and lp_t > 0:
+                            t.lp_burn = 100.0; t.gmgn_lp_burned = True
+                        elif 0 < lp_c < lp_t:
+                            pct_supply = round((1 - lp_c/lp_t)*100, 1)
+                            if pct_supply > t.lp_burn: t.lp_burn = pct_supply
+                except: pass
 
         raw = int(rc.get("score") or 0)
         if raw < 500:
@@ -719,11 +723,39 @@ class DataFetcher:
         t.fresh_wallet_rate = float(td.get("fresh_wallet_rate")      or td.get("freshWalletRate")       or 0)
         t.rat_trader_rate   = float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate")         or 0)
 
-        # LP burn dari GMGN
-        if td.get("lp_burned") or td.get("is_lp_burned") or td.get("burned"):
+        # LP burn dari GMGN — cek multiple field names
+        lp_burned_flags = [
+            td.get("lp_burned"), td.get("is_lp_burned"), td.get("burned"),
+            td.get("lpBurned"), td.get("isLpBurned"), td.get("lp_locked"),
+            td.get("is_lp_locked"), td.get("lpLocked"),
+        ]
+        if any(lp_burned_flags):
             t.lp_burn = 100.0
             t.gmgn_lp_burned = True
-            log.info(f"GMGN LP burned: 100% for {t.mint[:12]}")
+            log.info(f"GMGN LP burned: 100% for {t.mint[:12]} (root)")
+
+        # Cek dari pool object juga
+        if not t.gmgn_lp_burned and pool_data:
+            pool_lp_burned = [
+                pool_data.get("lp_burned"), pool_data.get("is_lp_burned"),
+                pool_data.get("burned"), pool_data.get("lpBurned"),
+                pool_data.get("locked"), pool_data.get("is_locked"),
+            ]
+            if any(pool_lp_burned):
+                t.lp_burn = 100.0
+                t.gmgn_lp_burned = True
+                log.info(f"GMGN LP burned: 100% for {t.mint[:12]} (pool)")
+
+        # Cek dari dev object juga
+        if not t.gmgn_lp_burned and dev_data:
+            dev_lp_burned = [
+                dev_data.get("lp_burned"), dev_data.get("is_lp_burned"),
+                dev_data.get("burned"), dev_data.get("lpBurned"),
+            ]
+            if any(dev_lp_burned):
+                t.lp_burn = 100.0
+                t.gmgn_lp_burned = True
+                log.info(f"GMGN LP burned: 100% for {t.mint[:12]} (dev)")
 
         if t.smart_money_count > 0:
             t.smart_money_present = True
