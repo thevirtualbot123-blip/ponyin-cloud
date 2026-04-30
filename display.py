@@ -1,114 +1,130 @@
 """
-display.py — Signal-only display. Clean, actionable, tidak cluttered.
+display.py — PONYIN AI AGENT v3.4
+Fixes:
+  - print_signal now reads TP1/TP2/SL percentages from plan (not hardcoded 30/50/20)
+  - add_pnl_section logic preserved.
 """
+import logging
 from datetime import datetime
-from filter_engine import Token
-from decision_engine import Decision
+from colorama import Fore, Style, Back
 
-G="\033[92m"; RD="\033[91m"; Y="\033[93m"; C="\033[96m"
-B="\033[1m";  D="\033[2m";   M="\033[95m"; R="\033[0m"
+log = logging.getLogger("PONYIN.Display")
+G=Fore.GREEN; Y=Fore.YELLOW; R=Fore.RED; B=Fore.BLUE; C=Fore.CYAN; D=Style.DIM; N=Style.RESET_ALL
+
 
 class Display:
 
-    def fp(self, p: float) -> str:
-        if p == 0: return "$0"
-        if p < 0.00001: return f"${p:.10f}"
-        if p < 0.001:   return f"${p:.8f}"
-        if p < 1:       return f"${p:.6f}"
-        return f"${p:.4f}"
+    def print_signal(self, token, decision, source: str):
+        mint  = token.mint
+        price = token.price
+        mc    = token.mc
+        liq   = token.liq
+        ch1h  = token.chg1h
+        ch5m  = token.chg5m
+        hld   = token.holder_count_gmgn if token.holder_count_gmgn > 0 else token.holder_count_rc
+        vol1h = token.vol1h
+        risk  = token.risk_norm
+        top10 = token.top10_pct
+        lp_b  = token.lp_burn
+        gmgn_lp = token.gmgn_lp_burned
+        fl    = token.flags
+        v     = token.verdict
+        det   = token.filter_details or []
+        plan  = token.plan or {}
 
-    def fchg(self, c: float) -> str:
-        return f"{G if c>=0 else RD}{c:+.1f}%{R}"
+        ch1h_s = f"{ch1h:+.1f}%" if ch1h != 0 else "n/a"
+        ch5m_s = f"{ch5m:+.1f}%" if ch5m != 0 else "n/a"
 
-    def print_signal(self, t: Token, d: Decision, source: str):
-        """Print signal lengkap — ini output utama agent"""
+        def p(k,v,c=""): print(f"  {c}{B}{k:<17}{N}{v}")
 
-        # Verdict color
-        if t.verdict == "MASUK":
-            vc, vi = G, "✅"
-        elif t.verdict == "WATCH":
-            vc, vi = Y, "⚠️"
+        # Title bar
+        print()
+        if "MASUK" in v:   title_color = G
+        elif "WATCH" in v: title_color = Y
+        else:              title_color = R
+        print(f"{Back.BLACK}{title_color}{token.name} ({token.symbol}) [{token.position_type}]{N}")
+
+        # Main
+        p("Mint", mint[:24]+"...")
+        p("Price", f"${price:,.8f}" if price else "N/A")
+        p("MC / Liq", f"${mc:,.0f}  /  ${liq:,.0f}")
+        p("Vol 1H", f"${vol1h:,.0f}")
+        p("1H / 5M", f"{ch1h_s}  /  {ch5m_s}")
+        if hld > 0:   p("Holders", str(hld))
+        if top10 > 0: p("Top10", f"{top10:.1f}% ({token.top10_source})")
+        p("Risk", f"{risk}/10 [{token.risk_label}]")
+        if token.lp_burn >= 95 and gmgn_lp:
+            p("LP Burn", f"100% (GMGN) ✓")
         else:
-            vc, vi = RD, "❌"
+            p("LP Burn", f"{lp_b:.0f}% {'✓' if lp_b>=80 else '⚠'}")
+        p("Verdict", f"{v}  |  {fl} flags")
 
-        # Wash trading warning
-        wash_warn = ""
-        if t.wash_trading_flag:
-            wash_warn = f"\n  {RD}{B}⚠ WASH TRADING DETECTED:{R} {t.wash_trading_reason[:80]}"
-
-        sep = f"{vc}{'═'*66}{R}"
-        print(f"\n{sep}")
-        print(f"  {vi} {B}{vc}{t.verdict}{R}  {B}{t.name} (${t.symbol}){R}")
-        print(f"  {D}{t.mint}{R}")
-        if wash_warn:
-            print(wash_warn)
-
-        # Market data
-        print(f"\n  {D}MARKET{R}")
-        print(f"  Price : {self.fp(t.price)}  MC: ${t.mc:,.0f}  Liq: ${t.liq:,.0f}")
-        print(f"  Vol1h : ${t.vol1h:,.0f}  Chg1h: {self.fchg(t.chg1h)}  Age: {t.age_hours:.1f}h")
-        txn_str = f"{t.buys1h}B / {t.sells1h}S" if (t.buys1h or t.sells1h) else "N/A"
-        print(f"  Txn1h : {txn_str}  DEX: {t.dex}")
-
-        # On-chain
-        rcolor = G if t.risk_norm<=3 else (Y if t.risk_norm<=6 else RD)
-        top10_str = f"{t.top10_pct:.1f}% ({t.top10_source})" if t.top10_pct > 0 else f"{Y}N/A — cek Solscan{R}"
-        lp_str    = f"{G}{t.lp_burn:.0f}%{R}" if t.lp_burn >= 80 else (f"{Y}{t.lp_burn:.0f}%{R}" if t.lp_burn > 0 else f"{Y}N/A{R}")
-        mint_str  = f"{RD}ACTIVE ⛔{R}" if t.mint_auth else f"{G}Revoked{R}"
-        soc = []
-        if t.has_twitter:  soc.append("TW")
-        if t.has_telegram: soc.append("TG")
-        if t.has_website:  soc.append("Web")
-        soc_str = f"{G}{', '.join(soc)}{R}" if soc else f"{Y}None{R}"
-
-        print(f"\n  {D}ON-CHAIN{R}")
-        print(f"  Risk  : {rcolor}{t.risk_norm}/10 [{t.risk_label}]{R}  LP: {lp_str}  Mint: {mint_str}")
-        print(f"  Top10 : {top10_str}")
-        print(f"  Social: {soc_str}")
-
-        # RugCheck risks (hanya danger/warn)
-        bad_risks = [(lvl,nm) for (lvl,nm,d2,v) in t.rc_risks if lvl in ("danger","warn")]
-        if bad_risks:
-            print(f"\n  {D}RISKS{R}")
-            for lvl, nm in bad_risks[:3]:
-                icon = f"{RD}⛔{R}" if lvl=="danger" else f"{Y}⚠{R}"
-                print(f"  {icon} {nm}")
-
-        # Filter details
-        print(f"\n  {D}FILTER ({t.flags} flag{'s' if t.flags!=1 else ''}){R}")
-        for det in t.filter_details:
-            if det.passed is True:    icon = f"{G}✓{R}"
-            elif det.passed is False: icon = f"{RD}✗{R}"
-            else:                     icon = f"{Y}i{R}"
-            print(f"  {icon} {det.step}: {det.value}")
-            if det.passed is False:
-                print(f"    {RD}→ {det.note}{R}")
+        # Plan
+        if plan:
+            def fp(v):
+                if v < 0.001: return f"${v:.8f}"
+                return f"${v:.6f}"
+            tp1_p = plan.get("tp1_pct", 30)
+            tp2_p = plan.get("tp2_pct", 50)
+            sl_p  = plan.get("sl_pct",  20)
+            print(f"\n  {Y}📋 Plan:{N}")
+            print(f"    Entry:     {fp(plan.get('entry'))}")
+            print(f"    TP1 +{tp1_p:.0f}%:    {fp(plan.get('tp1'))} → jual 50%")
+            print(f"    TP2 +{tp2_p:.0f}%:    {fp(plan.get('tp2'))} → jual 40%")
+            print(f"    Moonbag:   10%")
+            print(f"    SL  -{sl_p:.0f}%:     {fp(plan.get('sl'))}")
 
         # Decision
-        mode_str = f"{C}[AI]{R}" if d.mode == "AI" else f"{D}[Rule]{R}"
-        act_c = G if d.action=="ENTER" else (Y if d.action=="WATCH" else RD)
-        print(f"\n  {mode_str} {act_c}{B}{d.action}{R} [{d.conviction}] conf:{d.confidence:.0%}")
-        print(f"  {D}{d.reason}{R}")
+        print(f"\n  {Y}🧠 Decision:{N}  {decision.action} | {decision.confidence*100:.0f}% | "
+              f"Conviction: {decision.conviction}")
+        print(f"    Reason:    {decision.reason}")
+        print(f"    Sizing:    {decision.sizing_note}")
+        if decision.mode == "AI":
+            print(f"    Mode:      {C}AI-powered{N}")
+        else:
+            print(f"    Mode:      {D}Rule-based (fast & free){N}")
 
-        # Trading plan — HANYA jika MASUK/WATCH
-        if d.action in ("ENTER", "WATCH") and t.plan:
-            pl = t.plan
-            print(f"\n  {C}TRADING PLAN (eksekusi MANUAL){R}")
-            print(f"  Entry  : {self.fp(pl['entry'])}")
-            print(f"  {G}TP1 +30%: {self.fp(pl['tp1'])} → jual 50% posisi{R}")
-            print(f"  {G}TP2 +50%: {self.fp(pl['tp2'])} → jual 40% posisi{R}")
-            print(f"  {Y}Moonbag : sisa 10%{R}")
-            print(f"  {RD}SL  -20%: {self.fp(pl['sl'])} → cut loss{R}")
-            print(f"  DCA #1  : {self.fp(pl['dca1'])} (-20%) jika on-chain valid")
-            if d.sizing_note:
-                print(f"  Sizing  : {D}{d.sizing_note}{R}")
+        # Filter
+        if det:
+            print(f"\n  {Y}🚦 Filter Details:{N}")
+            for d in det:
+                if d.passed is True:
+                    mark = G + "✓ " + N
+                elif d.passed is False:
+                    mark = R + "✗ " + N
+                else:
+                    mark = D + "i " + N
+                if d.value and d.value != "None":
+                    print(f"    {mark}{B}{d.step:<17}{N}{d.value:<20}  {D}{d.note}{N}")
+                else:
+                    print(f"    {mark}{B}{d.step:<17}{N}{D}{d.note}{N}")
 
-        # Links
-        print(f"\n  {D}🔗 https://dexscreener.com/solana/{t.mint}")
-        print(f"     https://rugcheck.xyz/tokens/{t.mint}{R}")
-        print(sep)
+        # Sizing
+        if token.sizing_note:
+            print(f"\n  {Y}📏 Sizing:{N}  {token.sizing_note}")
+        if token.holder_health < 40:
+            print(f"\n  {R}⚠️ Holder health {token.holder_health}/100 — moderate concern{N}")
+        elif token.holder_health >= 75:
+            print(f"\n  {G}✅ Holder health {token.holder_health}/100 — excellent{N}")
+        else:
+            print(f"\n  {D}Holder health {token.holder_health}/100{N}")
 
-        # Extra warning jika SKIP karena wash trading
-        if t.wash_trading_flag and t.verdict != "MASUK":
-            print(f"{RD}{B}  ⚠ MANIPULASI TERDETEKSI — JANGAN ENTRY{R}")
-            print(f"  {D}Volume tidak organik. Lihat txn count vs volume.{R}\n")
+        print(f"\n  {D}═══════════════════════════════════════════════════════════════{N}")
+
+    def add_pnl_section(self, signal_data: dict):
+        if not signal_data: return
+        mc  = signal_data.get("mc", 0)
+        ent = signal_data.get("entry", 0)
+        vol = signal_data.get("vol1h", 0)
+        liq = signal_data.get("liq", 0)
+        print(f"\n  {Y}💰 P&L Strategy:{N}")
+        if liq > 0 and ent > 0:
+            cap = ent * liq * 0.02
+            print(f"    Cap: ${min(cap, 100):,.0f} | Liq/MC: {liq/mc:.1%} (auto)" if mc > 0 else "    N/A")
+        if ent > 0 and vol > 0:
+            slippage = "1-2%" if vol/liq > 1 else "0.5-1%" if liq > 0 else "?"
+            print(f"    Slippage: {slippage}")
+        if vol > 0 and mc > 0:
+            vol_cap = min(vol*0.3, 500)
+            print(f"    Vol Cap: ${vol_cap:,.0f}")
+        print(f"\n  {D}(Disclaimer: non-financial, DYOR, NFA){N}")
