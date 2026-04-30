@@ -1,306 +1,285 @@
 """
-telegram_bot.py — PONYIN AI AGENT v4.2
-Fixes:
-  - run() sekarang benar-benar polling getUpdates (sebelumnya stub `pass`)
-  - send_signal() sekarang benar-benar format & kirim signal (sebelumnya stub `return True`)
-  - stop() set flag berhenti
+telegram_bot.py — Bot PONYIN Telegram dengan rate limiting dan error handling.
 """
-import asyncio, json, logging
-from datetime import datetime
-from typing import Callable, Awaitable
+import asyncio, logging, html, json, traceback
+from datetime import datetime, timezone
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from dataclasses import dataclass
+from typing import Dict, Optional
+from filter_engine import Token
+from decision_engine import DecisionEngine, Decision
+from config import AgentConfig
 
-log = logging.getLogger("PONYIN.Bot")
+log = logging.getLogger("PONYIN.Telegram")
 
+# Rate limiting constants
+RATE_LIMIT_WINDOW = 60  # seconds
+MAX_ALERTS_PER_WINDOW = 10
+MAX_SUMMARY_PER_WINDOW = 2
 
-def _fp(p: float) -> str:
-    """Format harga."""
-    if p <= 0: return "$0"
-    if p < 0.00001: return f"${p:.10f}"
-    if p < 0.001:   return f"${p:.8f}"
-    if p < 1:       return f"${p:.6f}"
-    return f"${p:.4f}"
-
+@dataclass
+class UserSession:
+    alerts_sent: int = 0
+    summaries_sent: int = 0
+    window_start: datetime = None
 
 class TelegramBot:
-    def __init__(self, token: str, chat_id: str,
-                 on_command: Callable[[str, str], Awaitable[None]]):
-        self.token      = token.strip() if token else ""
-        self.chat_id    = str(chat_id).strip() if chat_id else ""
-        self.on_command = on_command
-        self.base_url   = f"https://api.telegram.org/bot{self.token}"
-        self._offset    = 0
-        self._running   = False
+    def __init__(self, cfg: AgentConfig, decision_engine: DecisionEngine):
+        self.cfg = cfg
+        self.decision_engine = decision_engine
+        self.app = None
+        self.sessions: Dict[int, UserSession] = {}
+        
+        # Lock untuk mencegah race condition saat kirim
+        self.send_lock = asyncio.Lock()
+        
+        # Counter untuk logging
+        self.alert_counter = 0
 
-    async def send(self, text: str, parse_mode: str = "HTML",
-                   to_chat_id: str = None) -> bool:
-        if not self.token:
-            return False
-        target = to_chat_id or self.chat_id
-        if not target:
-            log.warning("chat_id belum diset")
-            return False
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/sendMessage",
-                    json={
-                        "chat_id":                  target,
-                        "text":                     text[:4096],
-                        "parse_mode":               parse_mode,
-                        "disable_web_page_preview": True,
-                    },
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as r:
-                    data = await r.json()
-                    if r.status != 200:
-                        log.error(f"Send error {r.status}: {data.get('description','')}")
-                        return False
-                    return True
-        except Exception as e:
-            log.error(f"Telegram send error: {e}")
-            return False
+    async def start(self):
+        """Start the Telegram bot."""
+        if not self.cfg.TELEGRAM_BOT_TOKEN:
+            log.error("TELEGRAM_BOT_TOKEN tidak diset. Bot tidak akan start.")
+            return
+            
+        self.app = Application.builder().token(self.cfg.TELEGRAM_BOT_TOKEN).build()
+        
+        # Register handlers
+        self.app.add_handler(CommandHandler("start", self._handle_start))
+        self.app.add_handler(CommandHandler("help", self._handle_help))
+        self.app.add_handler(CommandHandler("summary", self._handle_summary))
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
+        
+        log.info("Telegram bot starting...")
+        await self.app.initialize()
+        await self.app.start()
 
-    async def send_signal(self, token_data: dict, decision: dict) -> bool:
-        """Format dan kirim signal lengkap ke Telegram."""
-        t = token_data
-        d = decision
+    async def stop(self):
+        """Stop the Telegram bot."""
+        if self.app:
+            await self.app.stop()
+            await self.app.shutdown()
 
-        verdict  = t.get("verdict", "?")
-        if "MASUK" in verdict:   emoji, label = "✅", "MASUK"
-        elif "WATCH" in verdict: emoji, label = "⚠️", "WATCH"
-        else:                    emoji, label = "❌", "SKIP"
-
-        action     = d.get("action",     "?")
-        conviction = d.get("conviction", "?")
-        reason     = d.get("reason",     "")
-
-        mint   = t.get("mint",    "")
-        name   = t.get("name",    "Unknown")
-        symbol = t.get("symbol",  "???")
-        mc     = t.get("mc",      0)
-        liq    = t.get("liq",     0)
-        vol1h  = t.get("vol1h",   0)
-        price  = t.get("price",   0)
-        chg1h  = t.get("chg1h",   0)
-        chg5m  = t.get("chg5m",   0)
-        age_h  = t.get("age_hours", 0)
-        risk   = t.get("risk_norm", 0)
-        lp     = t.get("lp_burn",   0)
-        top10  = t.get("top10_pct", 0)
-        top10s = t.get("top10_source", "N/A")
-        flags  = t.get("flags",     0)
-        bch    = t.get("dex",       "")
-        buys   = t.get("buys1h",    0)
-        sells  = t.get("sells1h",   0)
-
-        chg1h_s = f"{'🟢' if chg1h >= 0 else '🔴'}{chg1h:+.1f}%"
-        chg5m_s = f"{'▲' if chg5m >= 0 else '▼'}{abs(chg5m):.1f}%"
-        age_s   = f"{age_h*60:.0f}m" if age_h < 1 else f"{age_h:.1f}h"
-
-        lp_s   = ("100% 🔥burned" if t.get("gmgn_lp_burned")
-                  else (f"{lp:.0f}%" if lp > 0 else "0% ⚠️"))
-        top10_s = f"{top10:.1f}% ({top10s})" if top10 > 0 else "N/A ⚠️"
-        mint_s  = "🔴 ACTIVE" if t.get("mint_auth") else "✅ Revoked"
-
-        soc = []
-        if t.get("has_twitter"):  soc.append("🐦TW")
-        if t.get("has_telegram"): soc.append("✈️TG")
-        if t.get("has_website"):  soc.append("🌐Web")
-        soc_s = " ".join(soc) if soc else "None"
-
-        txn_s = f"{buys}B/{sells}S" if (buys or sells) else "N/A"
-
-        action_emoji = "🚀" if action == "ENTER" else ("👀" if action == "WATCH" else "⏭")
-
-        msg = (
-            f"{emoji} <b>{label}</b>  —  <b>{name} (${symbol})</b>\n"
-            f"<code>{mint}</code>\n"
-        )
-        if t.get("wash_trading_flag"):
-            msg += f"🚨 <b>WASH TRADING:</b> {t.get('wash_trading_reason','')[:60]}\n"
-
-        msg += (
-            f"\n📊 <b>MARKET</b>\n"
-            f"Price : <b>{_fp(price)}</b>\n"
-            f"MC    : <b>${mc:,.0f}</b>  |  Liq: ${liq:,.0f}\n"
-            f"Vol1h : ${vol1h:,.0f}  |  Txn: {txn_s}\n"
-            f"Chg1h : {chg1h_s}  |  5m: {chg5m_s}  |  Age: {age_s}\n"
-            f"DEX   : {bch}\n"
-            f"\n🔐 <b>ON-CHAIN</b>\n"
-            f"Risk  : <b>{risk}/10</b>  |  LP: {lp_s}\n"
-            f"Top10 : {top10_s}\n"
-            f"Mint  : {mint_s}\n"
-            f"Social: {soc_s}\n"
-        )
-
-        # Tambah info holder/smart money jika ada
-        hc = t.get("holder_count_gmgn") or t.get("holder_count_rc") or 0
-        if hc:
-            msg += f"Holders: {hc}\n"
-        if t.get("smart_money_present"):
-            msg += f"💎 Smart Money: {t.get('smart_money_pct',0):.1f}%\n"
-        if t.get("bundle_pct", 0) > 0:
-            msg += f"📦 Bundle: {t.get('bundle_pct',0):.1f}%\n"
-
-        msg += (
-            f"\n{action_emoji} <b>[{conviction}] {action}</b>  "
-            f"Flags: {flags}\n"
-            f"<i>{reason[:150]}</i>\n"
-        )
-
-        plan = t.get("plan") or {}
-        if plan and action in ("ENTER", "WATCH") and price > 0:
-            tp1_pct = plan.get("tp1_pct", 30)
-            tp2_pct = plan.get("tp2_pct", 50)
-            sl_pct  = plan.get("sl_pct", 20)
-            msg += (
-                f"\n📋 <b>TRADING PLAN</b> (eksekusi MANUAL)\n"
-                f"Entry : {_fp(plan.get('entry', price))}\n"
-                f"🟢 TP1 +{tp1_pct:.0f}%: {_fp(plan.get('tp1', 0))} → jual 50%\n"
-                f"🟢 TP2 +{tp2_pct:.0f}%: {_fp(plan.get('tp2', 0))} → jual 40%\n"
-                f"🌙 Moonbag: 10%\n"
-                f"🔴 SL  -{sl_pct:.0f}%: {_fp(plan.get('sl', 0))} → cut loss\n"
-            )
-        if t.get("sizing_note"):
-            msg += f"💼 Sizing: {t.get('sizing_note','')}\n"
-
-        msg += (
-            f"\n"
-            f"<a href='https://dexscreener.com/solana/{mint}'>📈 DexScreener</a>  "
-            f"<a href='https://rugcheck.xyz/tokens/{mint}'>🛡 RugCheck</a>  "
-            f"<a href='https://gmgn.ai/sol/token/{mint}'>💹 GMGN</a>\n"
-            f"<i>{datetime.now().strftime('%H:%M:%S')} UTC</i>"
-        )
-
-        return await self.send(msg)
-
-    async def run(self):
-        """Long-polling loop. Fix: clear webhook dulu, handle 409 (instance ganda)."""
-        if not self.token:
-            log.warning("Bot token tidak ada — polling dinonaktifkan")
+    async def send_alert(self, token: Token, decision: Decision, source: str, raw: str):
+        """Send alert to Telegram chat with rate limiting."""
+        if not self.cfg.TELEGRAM_CHAT_ID:
+            log.warning("TELEGRAM_CHAT_ID tidak diset. Alert tidak dikirim.")
             return
 
-        self._running = True
-
-        import aiohttp
-
-        # ── Hapus webhook dulu (mencegah 409 conflict) ──
+        user_id = self.cfg.TELEGRAM_CHAT_ID
+        
+        # Check rate limit
+        now = datetime.now(timezone.utc)
+        session = self.sessions.get(user_id, UserSession(window_start=now))
+        
+        if session.window_start is None:
+            session.window_start = now
+            
+        # Reset window jika lebih dari 60 detik
+        if (now - session.window_start).seconds > RATE_LIMIT_WINDOW:
+            session.window_start = now
+            session.alerts_sent = 0
+            
+        # Cek apakah sudah melebihi limit
+        if session.alerts_sent >= MAX_ALERTS_PER_WINDOW:
+            log.warning(f"Rate limit exceeded for user {user_id}. Skipping alert.")
+            return
+            
+        # Update counter
+        session.alerts_sent += 1
+        self.sessions[user_id] = session
+        
+        # Buat pesan
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/deleteWebhook",
-                    json={"drop_pending_updates": False},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as r:
-                    if r.status == 200:
-                        log.info("Bot polling started (webhook cleared)")
-                    else:
-                        log.warning(f"deleteWebhook returned {r.status}")
+            message = self._format_token_message(token, decision, source, raw)
+            
+            # Kirim dengan retry logic
+            success = await self._send_with_retry(message)
+            if success:
+                self.alert_counter += 1
+                log.info(f"Alert #{self.alert_counter} sent successfully. Total alerts: {self.alert_counter}")
+            else:
+                log.error("Failed to send alert after retries.")
+                
         except Exception as e:
-            log.warning(f"deleteWebhook error (lanjut): {e}")
+            log.error(f"Error sending alert: {e}")
 
-        while self._running:
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML entities safely for Telegram."""
+        if text is None:
+            return "N/A"
+        # Escape HTML first
+        escaped = html.escape(str(text), quote=False)
+        # Then handle specific Telegram formatting
+        escaped = escaped.replace('<', '&lt;').replace('>', '&gt;')
+        return escaped
+
+    def _format_token_message(self, token: Token, decision: Decision, source: str, raw: str) -> str:
+        """Format token information into a readable Telegram message."""
+        # Escape all fields that might contain HTML
+        name_escaped = self._escape_html(token.name)
+        symbol_escaped = self._escape_html(token.symbol)
+        
+        # Format numbers with proper escaping
+        mc_str = f"${token.mc:,.0f}" if token.mc > 0 else "N/A"
+        liq_str = f"${token.liq:,.0f}" if token.liq > 0 else "N/A"
+        vol_str = f"${token.vol1h:,.0f}" if token.vol1h > 0 else "N/A"
+        
+        # Safely format percentages
+        chg_str = f"{token.chg1h:+.1f}%" if token.chg1h is not None else "N/A"
+        top10_str = f"{token.top10_pct:.1f}%" if token.top10_pct is not None else "N/A"
+        
+        # Escape decision reason
+        reason_escaped = self._escape_html(decision.reason)
+        
+        # Build main message
+        message_parts = [
+            f"🚨 <b>PONYIN ALERT</b> 🚨",
+            f"<b>Token:</b> {name_escaped} (${symbol_escaped})",
+            f"<b>Action:</b> <code>{decision.action}</code> | <b>Conviction:</b> {decision.conviction}",
+            f"<b>Confidence:</b> {decision.confidence:.0%} | <b>Mode:</b> {decision.mode}",
+            "",
+            f"<b>📊 Metrics:</b>",
+            f"• MC: {mc_str} | Liq: {liq_str}",
+            f"• Vol1h: {vol_str} | Chg1h: {chg_str}",
+            f"• Buys: {token.buys1h} | Sells: {token.sells1h}",
+            f"• Top10: {top10_str} | Risk: {token.risk_norm}/10",
+            f"• LP Burn: {token.lp_burn:.0f}% | Age: {token.age_hours:.1f}h",
+        ]
+        
+        # Add mint authority status
+        if token.mint_auth is not None:
+            auth_status = "🟢 Revoked" if token.mint_auth == "revoked" else f"🔴 Active: {self._escape_html(token.mint_auth[:8])}..."
+            message_parts.append(f"• Mint Auth: {auth_status}")
+        else:
+            message_parts.append("• Mint Auth: N/A")
+            
+        # Add wash trading info if flagged
+        if token.wash_trading_flag:
+            wt_reason = self._escape_html(token.wash_trading_reason or "Unknown reason")
+            message_parts.append(f"⚠️ Wash Trading: {wt_reason}")
+            
+        # Add decision details
+        message_parts.extend([
+            "",
+            f"<b>💡 Reason:</b> {reason_escaped}",
+            f"<b>💰 Sizing:</b> {self._escape_html(decision.sizing_note)}",
+        ])
+        
+        # Add entry plan if available
+        if decision.entry_plan:
+            message_parts.extend([
+                "",
+                f"<b>🎯 Entry Plan:</b>",
+                f"{self._escape_html(decision.entry_plan)}"
+            ])
+            
+        # Add source and timestamp
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        message_parts.extend([
+            "",
+            f"<i>Source: {self._escape_html(source)} | Time: {timestamp}</i>"
+        ])
+        
+        return "\n".join(message_parts)
+
+    async def _send_with_retry(self, message: str, max_retries: int = 3) -> bool:
+        """Send message with retry logic."""
+        for attempt in range(max_retries):
             try:
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(
-                        f"{self.base_url}/getUpdates",
-                        params={
-                            "offset":          self._offset,
-                            "timeout":         30,
-                            "allowed_updates": json.dumps(["message"]),
-                        },
-                        timeout=aiohttp.ClientTimeout(total=35),
-                    ) as r:
-                        if r.status == 401:
-                            log.error("Bot token tidak valid!")
-                            return
-                        if r.status == 409:
-                            # ── FIX: 409 = dua instance polling bersamaan ──
-                            # Railway restart: instance lama belum mati. Tunggu 30 detik.
-                            log.warning("Bot 409 conflict — instance lain masih polling. Tunggu 30 detik...")
-                            await asyncio.sleep(30)
-                            continue
-                        if r.status != 200:
-                            log.warning(f"getUpdates HTTP {r.status}")
-                            await asyncio.sleep(5)
-                            continue
-
-                        data = await r.json()
-                        updates = data.get("result") or []
-
-                        for upd in updates:
-                            self._offset = upd["update_id"] + 1
-                            msg   = upd.get("message") or {}
-                            text  = (msg.get("text") or "").strip()
-                            chat  = str((msg.get("chat") or {}).get("id", ""))
-                            from_ = str((msg.get("from") or {}).get("id", ""))
-
-                            if self.chat_id and chat != self.chat_id and from_ != self.chat_id:
-                                log.debug(f"Ignored msg from unauthorized chat {chat}")
-                                continue
-
-                            if not text:
-                                continue
-
-                            parts = text.split(None, 1)
-                            cmd   = parts[0].lower()
-                            args  = parts[1].strip() if len(parts) > 1 else ""
-
-                            if (not text.startswith("/") and
-                                    len(text) >= 32 and " " not in text):
-                                cmd, args = text, ""
-
-                            try:
-                                await self.on_command(cmd, args)
-                            except Exception as e:
-                                log.error(f"on_command error: {e}", exc_info=True)
-
-            except asyncio.CancelledError:
-                break
+                async with self.send_lock:
+                    # Kirim pesan
+                    await self.app.bot.send_message(
+                        chat_id=self.cfg.TELEGRAM_CHAT_ID,
+                        text=message,
+                        parse_mode='HTML',
+                        disable_web_page_preview=True
+                    )
+                    return True
+                    
             except Exception as e:
-                log.error(f"Bot polling error: {e}")
-                await asyncio.sleep(5)
+                log.warning(f"Send attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    log.error(f"All {max_retries} attempts failed.")
+                    
+        return False
 
-    def stop(self):
-        self._running = False
-
-
-def format_status(stats: dict, processed_count: int) -> str:
-    total = stats.get("total", 0)
-    masuk = stats.get("masuk", 0)
-    watch = stats.get("watch", 0)
-    skip  = stats.get("skip", 0)
-    wr    = (masuk / total * 100) if total > 0 else 0
-    return (
-        f"📊 <b>SIGNAL STATS</b>\n\n"
-        f"Total processed : {processed_count}\n"
-        f"Signals total   : {total}\n"
-        f"✅ MASUK        : {masuk} ({wr:.0f}%)\n"
-        f"⚠️ WATCH        : {watch}\n"
-        f"❌ SKIP         : {skip}\n\n"
-        f"<i>{datetime.now().strftime('%Y-%m-%d %H:%M')} UTC</i>"
-    )
-
-def format_log(records: list) -> str:
-    if not records:
-        return "📋 Belum ada signal."
-    lines = ["📋 <b>10 SIGNAL TERAKHIR</b>\n"]
-    for rec in records:
-        v     = rec.get("verdict", "?")
-        emoji = "✅" if "MASUK" in v else ("⚠️" if "WATCH" in v else "❌")
-        sym   = rec.get("symbol", "?")
-        mc    = rec.get("mc", 0)
-        ts    = rec.get("ts", "")[:16]
-        pt    = rec.get("position_type", "?")[:3]
-        flags = rec.get("flags", 0)
-        hh    = rec.get("holder_health", 0)
-        mint  = rec.get("mint", "")
-        gmgn  = f"https://gmgn.ai/sol/token/{mint}"
-        lines.append(
-            f"{emoji} <b>${sym}</b> [{pt}] ${mc:,.0f} "
-            f"flags:{flags} HH:{hh} "
-            f"<a href='{gmgn}'>GMGN</a>\n"
-            f"   <i>{ts}</i>"
+    async def _handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /start command."""
+        welcome_msg = (
+            "🦄 <b>Welcome to PONYIN Bot!</b>\n\n"
+            "I'm your Solana token analysis assistant.\n\n"
+            "<b>Commands:</b>\n"
+            "• /start - Show this message\n"
+            "• /help - Show help\n"
+            "• /summary - Get trading summary\n\n"
+            "I'll send you alerts for promising tokens based on advanced filtering."
         )
-    return "\n".join(lines)
+        
+        await update.effective_message.reply_text(welcome_msg, parse_mode='HTML')
+
+    async def _handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help command."""
+        help_msg = (
+            "📚 <b>PONYIN Bot Help</b>\n\n"
+            "<b>How I work:</b>\n"
+            "• I analyze Solana tokens using multiple filters\n"
+            "• I check for risks like mint authority, top holder concentration\n"
+            "• I provide entry plans and risk management suggestions\n\n"
+            "<b>Alert Levels:</b>\n"
+            "• ENTER: High conviction opportunities\n"
+            "• WATCH: Monitor for potential entries\n"
+            "• SKIP: Avoid these tokens\n\n"
+            "For support, contact the developer."
+        )
+        
+        await update.effective_message.reply_text(help_msg, parse_mode='HTML')
+
+    async def _handle_summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /summary command with rate limiting."""
+        user_id = update.effective_user.id
+        
+        # Check rate limit for summaries
+        now = datetime.now(timezone.utc)
+        session = self.sessions.get(user_id, UserSession(window_start=now))
+        
+        if session.window_start is None:
+            session.window_start = now
+            
+        # Reset window if more than 60 seconds
+        if (now - session.window_start).seconds > RATE_LIMIT_WINDOW:
+            session.window_start = now
+            session.summaries_sent = 0
+            
+        # Check if over limit
+        if session.summaries_sent >= MAX_SUMMARY_PER_WINDOW:
+            await update.effective_message.reply_text(
+                "Rate limit exceeded for summaries. Please wait before requesting again."
+            )
+            return
+            
+        session.summaries_sent += 1
+        self.sessions[user_id] = session
+        
+        summary = (
+            f"📊 <b>PONYIN Trading Summary</b>\n\n"
+            f"• Total Alerts Sent: {self.alert_counter}\n"
+            f"• Current Mode: {'AI + Rules' if self.cfg.AI_ENABLED else 'Rules Only'}\n"
+            f"• Portfolio Size: {self.cfg.PORTFOLIO_SOL} SOL\n"
+            f"• Risk Management: TP1={self.cfg.TP1_PCT}%, TP2={self.cfg.TP2_PCT}%, SL={self.cfg.SL_PCT}%\n\n"
+            f"<i>Last updated: {datetime.now().strftime('%H:%M:%S')}</i>"
+        )
+        
+        await update.effective_message.reply_text(summary, parse_mode='HTML')
+
+    async def _handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle regular messages."""
+        user_msg = update.effective_message.text.lower()
+        
+        if 'hello' in user_msg or 'hi' in user_msg:
+            await update.effective_message.reply_text("Hello! Use /help to see available commands.")
+        else:
+            await update.effective_message.reply_text("I'm PONYIN bot. Use /help to see what I can do!")
