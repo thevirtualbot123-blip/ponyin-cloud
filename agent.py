@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-PONYIN AI AGENT v7.0
+PONYIN AI AGENT v7.1
 Fixes:
-  - /scan uses get_filtered_scan_mints() with DexScreener filter
-    (MC $5K-$50K | Liq ≥$1K | Vol1h ≥$3K | PF/Raydium/Meteora | 5M↑)
-  - source field added to token_dict so Telegram shows it correctly
-  - /scan message shows filter params
+  - Removed run_diagnostics() call (method does not exist in DataFetcher)
+  - Wrapped startup diagnostics in try/except to prevent crash
+  - decision_engine uses safe_div to prevent ZeroDivisionError
 """
 import asyncio, sys, os, json, logging
 from datetime import datetime
@@ -42,7 +41,7 @@ def banner():
     print(f"""
 {C}{B}
 ╔══════════════════════════════════════════════════════════════════╗
-║     PONYIN AI AGENT v7.0 — GMGN Fix + Filtered Scan            ║
+║     PONYIN AI AGENT v7.1 — Stable Cloud Edition                ║
 ╚══════════════════════════════════════════════════════════════════╝{R}
 """)
 
@@ -184,7 +183,7 @@ class PonyinAgent:
 
         if command in ("/start", "/help"):
             await self.bot.send(
-                "🤖 <b>PONYIN AI AGENT v7.0</b>\n\n"
+                "🤖 <b>PONYIN AI AGENT v7.1</b>\n\n"
                 "<b>Commands:</b>\n"
                 "/scan — scan token baru (filter DexScreener)\n"
                 "/check &lt;CA&gt; — analisis satu token\n"
@@ -217,7 +216,7 @@ class PonyinAgent:
                         min_mc=cfg.MIN_MC,
                         max_mc=cfg.MAX_MC,
                         min_liq=cfg.MIN_LIQ,
-                        min_vol1h=1_000,    # intentionally loose, filter engine handle sisanya
+                        min_vol1h=1_000,
                     )
 
                 if not filtered:
@@ -304,7 +303,7 @@ class PonyinAgent:
             app.router.add_get("/health", lambda r: web.Response(
                 text=json.dumps({
                     "status":    "ok",
-                    "version":   "7.0",
+                    "version":   "7.1",
                     "signals":   self._stats["total"],
                     "processed": len(self._processed),
                 }),
@@ -347,6 +346,7 @@ class PonyinAgent:
             "position_type":      token.position_type,
             "wash_trading_flag":  token.wash_trading_flag,
             "cluster_risk":       token.cluster_risk,
+            "cluster_score":      token.cluster_score,
             "dev_farm_risk":      token.dev_farm_risk,
             "smart_money_present":token.smart_money_present,
             "timing_score":       token.timing_score,
@@ -415,7 +415,7 @@ class PonyinAgent:
         is_cloud = bool(
             os.getenv("RENDER") or os.getenv("RAILWAY_ENVIRONMENT")
         )
-        print(f"{G}PONYIN AGENT v7.0 starting...{R}")
+        print(f"{G}PONYIN AGENT v7.1 starting...{R}")
         print(f"  Mode       : {'☁ Cloud' if is_cloud else '💻 Local'}")
         print(f"  Bot token  : {'✓ Set' if self.cfg.BOT_TOKEN else '✗ Tidak ada'}")
         print(f"  Signal ch  : {', '.join(self.cfg.SIGNAL_CHANNELS) or 'none'}")
@@ -436,11 +436,11 @@ class PonyinAgent:
                 self.tg_listener.run(), name="tg_listener"))
 
         print(f"\n{G}{B}🚀 AGENT AKTIF{R}\n")
-        # Diagnosa sumber data saat startup
+        # Startup connectivity test — safe, no crash if unavailable
         try:
-            await self.fetcher.run_diagnostics()
+            await self._startup_test()
         except Exception as e:
-            log.warning(f"Diagnostics error (non-fatal): {e}")
+            log.warning(f"Startup test error (non-fatal): {e}")
         try:
             await asyncio.gather(*tasks)
         except SystemExit:
@@ -449,6 +449,29 @@ class PonyinAgent:
             log.error(f"Fatal: {e}", exc_info=True)
             await self.bot.send(f"🚨 Agent crash: {str(e)[:100]}")
             raise
+
+    async def _startup_test(self):
+        """Quick connectivity test at startup — safe, never crashes."""
+        try:
+            async with self.fetcher.session() as session:
+                # Test DexScreener API with a well-known token (USDC)
+                usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+                data = await self.fetcher.dex_token(session, usdc)
+                if data:
+                    log.info("Startup test: DexScreener OK")
+                else:
+                    log.warning("Startup test: DexScreener returned empty")
+        except Exception as e:
+            log.warning(f"Startup test: DexScreener fail — {e}")
+        # GMGN test
+        try:
+            gmgn = await self.fetcher.gmgn_token_info(None, usdc)
+            if gmgn:
+                log.info("Startup test: GMGN OK")
+            else:
+                log.warning("Startup test: GMGN returned empty")
+        except Exception as e:
+            log.warning(f"Startup test: GMGN fail — {e}")
 
 
 if __name__ == "__main__":
