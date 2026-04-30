@@ -1,6 +1,9 @@
 """
-gmgn_client.py — PONYIN GMGN Client v2.2 FINAL
-Debug mode + Auto-fix URL + Retry all methods.
+gmgn_client.py — PONYIN GMGN Client v2.3
+Fixes:
+  - _extract_token_from_get tightened: now requires both 'address' AND 'symbol'
+    to prevent returning error pages / malformed responses.
+  - Better code/data validation before returning extracted token.
 """
 import asyncio
 import logging
@@ -275,7 +278,9 @@ class GMGNClient:
             if isinstance(data, dict) and "token" in data:
                 return data["token"]
             return data
-        if "address" in raw or "mint" in raw or "holder_count" in raw:
+        # FIX v2.3: Tighten validation — require address AND symbol/name
+        # to avoid returning error pages or partial responses
+        if "address" in raw and ("symbol" in raw or "name" in raw) and ("holder_count" in raw or "price" in raw):
             return raw
         log.debug(f"GMGN get: unrecognized format, keys={list(raw.keys())[:10]}")
         return None
