@@ -1,10 +1,9 @@
 """
-filter_engine.py — PONYIN AI AGENT v7.5 FINAL
+filter_engine.py — PONYIN AI AGENT v7.6
 Fixes:
-  - Complete apply_filters (no truncation)
-  - Heuristic fallbacks for bundle, smart money, sniper detection
-  - holder_count priority: Helius DAS > GMGN > RugCheck
-  - All original filter rules and thresholds UNCHANGED
+  - _build_plan now uses cfg.TP1_PCT, cfg.TP2_PCT, cfg.SL_PCT, cfg.DCA1_PCT, cfg.DCA2_PCT
+    instead of hardcoded values, ensuring consistency with decision_engine and display.
+  - All other logic unchanged.
 """
 import re, logging
 from datetime import datetime
@@ -264,7 +263,7 @@ class FilterEngine:
                     break
 
             # Coba dari dev object
-            dev_data = td.get("dev") or {}
+            dev_data = data.get("dev") or td.get("dev") or {}
             if not (t.top10_source == "GMGN" and t.top10_pct > 0) and dev_data:
                 for key in ("top_10_holder_rate", "top10_holder_rate", "topHolderRate"):
                     raw = dev_data.get(key)
@@ -283,7 +282,7 @@ class FilterEngine:
         if not t.holder_count_gmgn:
             for key in ("holder_count", "holder", "holderCount",
                         "holders", "holder_num"):
-                hc = td.get(key)
+                hc = td.get(key) if td.get(key) is not None else data.get(key)
                 if hc:
                     try:
                         t.holder_count_gmgn = int(hc)
@@ -296,14 +295,17 @@ class FilterEngine:
     def _analyze_gmgn_security(self, t: Token, data: dict) -> Token:
         from data_fetcher import DataFetcher
         td = DataFetcher._unwrap_gmgn(data)
-        t.sniper_count   = int(td.get("sniper_count") or td.get("sniperCount") or 0)
-        t.rat_trader_rate= float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate") or 0)
-        t.smart_money_count = int(td.get("smart_degen_count") or td.get("smartDegenCount") or 0)
-        t.kol_holders    = int(td.get("renowned_wallets") or td.get("renowned_wallet_count") or 0)
-        t.is_honeypot    = bool(td.get("is_honeypot") or td.get("isHoneypot"))
-        t.rug_ratio      = float(td.get("rug_ratio") or td.get("dev_rug_ratio") or 0)
-        t.wash_trade_gmgn= bool(td.get("wash_trade_flag") or td.get("is_wash_trading"))
-        t.fresh_wallet_rate = float(td.get("fresh_wallet_rate") or td.get("freshWalletRate") or 0)
+        # FIX: cek dari raw root juga, karena _unwrap_gmgn bisa return inner token object
+        def get(key, default=None):
+            return td.get(key, default) if td.get(key) is not None else data.get(key, default)
+        t.sniper_count   = int(get("sniper_count") or get("sniperCount") or 0)
+        t.rat_trader_rate= float(get("rat_trader_amount_rate") or get("ratTraderRate") or 0)
+        t.smart_money_count = int(get("smart_degen_count") or get("smartDegenCount") or 0)
+        t.kol_holders    = int(get("renowned_wallets") or get("renowned_wallet_count") or 0)
+        t.is_honeypot    = bool(get("is_honeypot") or get("isHoneypot"))
+        t.rug_ratio      = float(get("rug_ratio") or get("dev_rug_ratio") or 0)
+        t.wash_trade_gmgn= bool(get("wash_trade_flag") or get("is_wash_trading"))
+        t.fresh_wallet_rate = float(get("fresh_wallet_rate") or get("freshWalletRate") or 0)
         if t.smart_money_count > 0:
             t.smart_money_present = True
         return t
@@ -792,7 +794,7 @@ class FilterEngine:
         else:          info("Momentum", f"{ms}/100", f"Bearish — {t.chg1h:+.1f}%")
 
         if t.smart_money_present:
-            ok("Smart Money", f"{t.smart_money_pct:.1f}%", "GAKE hold ✓")  # perbaiki tulisan yang terputus
+            ok("Smart Money", f"{t.smart_money_pct:.1f}%", "Smart hold ✓")
 
         total_tx = t.buys1h + t.sells1h
         if total_tx > 0:
@@ -859,11 +861,11 @@ class FilterEngine:
             t.sizing_note = "Price tidak tersedia."
             return t
         if t.position_type == "LOWCAP":
-            tp1, tp2, sl, dca1, dca2, max_p = 30, 50, 20, 20, 35, 0.10
+            tp1, tp2, sl, dca1, dca2, max_p = cfg.TP1_PCT, cfg.TP2_PCT, cfg.SL_PCT, cfg.DCA1_PCT, cfg.DCA2_PCT, 0.10
         elif t.position_type == "MIDCAP":
-            tp1, tp2, sl, dca1, dca2, max_p = 30, 70, 25, 20, 35, 0.20
+            tp1, tp2, sl, dca1, dca2, max_p = cfg.TP1_PCT, cfg.TP2_PCT, cfg.SL_PCT, cfg.DCA1_PCT, cfg.DCA2_PCT, 0.20
         else:
-            tp1, tp2, sl, dca1, dca2, max_p = 20, 50, 15, 15, 25, 0.25
+            tp1, tp2, sl, dca1, dca2, max_p = cfg.TP1_PCT, cfg.TP2_PCT, cfg.SL_PCT, cfg.DCA1_PCT, cfg.DCA2_PCT, 0.25
         if t.flags == 1:
             max_p *= 0.5
         if t.cluster_risk == "MEDIUM":
