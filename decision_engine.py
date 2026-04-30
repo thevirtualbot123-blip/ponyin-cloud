@@ -11,7 +11,7 @@ Ini menghemat credits secara drastis.
 import json, logging, aiohttp
 from dataclasses import dataclass
 from typing import Optional
-from filter_engine import Token
+from filter_engine import Token, safe_div
 from config import AgentConfig
 
 log = logging.getLogger("PONYIN.Decision")
@@ -132,7 +132,9 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
             if flags >= 2:
                 reasons.append(f"{flags} red flags")
             if wash:
-                reasons.append(f"wash trading: {token.wash_trading_reason[:60]}")
+                wt_reason = (token.wash_trading_reason or "")[:60]
+                wt_reason = wt_reason.replace("<", "&lt;").replace(">", "&gt;")
+                reasons.append(f"wash trading: {wt_reason}")
             return Decision(
                 action="SKIP", confidence=0.95,
                 reason=" + ".join(reasons),
@@ -147,6 +149,8 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
                 if d.passed is False:
                     flag_desc = d.step
                     break
+            # Escape HTML entities dalam flag_desc
+            flag_desc = flag_desc.replace("<", "&lt;").replace(">", "&gt;")
             return Decision(
                 action="WATCH", confidence=0.6,
                 reason=f"1 red flag ({flag_desc}) — observe dulu",
@@ -181,8 +185,14 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
         if not token.has_twitter:  concern.append("no Twitter")
         if token.age_hours > 24:   concern.append(f"old ({token.age_hours:.0f}h)")
 
-        if token.vol1h > token.liq * 0.3:
-            high.append(f"volume/liq ok ({token.vol1h/token.liq:.1f}x)")
+        # Safe division for volume/liq ratio — hindari ZeroDivisionError
+        # Proteksi ekstra: cek None, 0, dan negative
+        vol_liq_ratio = safe_div(token.vol1h, token.liq, 0.0)
+        if vol_liq_ratio > 0.3:
+            high.append(f"volume/liq ok ({vol_liq_ratio:.1f}x)")
+        elif token.vol1h > 0 and (token.liq is None or token.liq <= 0):
+            # Jika liq=0 tapi ada volume, ini anomali — tambahkan concern
+            concern.append("zero liquidity with volume — anomaly")
 
         # Score
         score = len(high)*2 + len(med) - len(concern)*1.5
@@ -199,6 +209,9 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
 
         positives = ", ".join(high + med) or "filter passed"
         concerns  = ", ".join(concern)  or "none"
+        # Escape HTML entities dalam reason untuk Telegram
+        positives = positives.replace("<", "&lt;").replace(">", "&gt;")
+        concerns = concerns.replace("<", "&lt;").replace(">", "&gt;")
         reason    = f"[{conviction}] {positives}"
         if concerns != "none":
             reason += f" | concerns: {concerns}"
