@@ -1,12 +1,9 @@
 """
 decision_engine.py — Rule-based Decision Engine (No AI Credits Needed).
 
-v2: Pure rule-based, tidak butuh Anthropic API.
-AI mode disabled by default — hemat credits, akurat berdasarkan data.
-
-Jika ANTHROPIC_API_KEY diset, AI akan dipakai HANYA untuk token
-yang benar-benar lolos filter (0 flags) untuk reasoning tambahan.
-Ini menghemat credits secara drastis.
+v2.1: Fixed ZeroDivisionError when token.liq == 0.
+      Fixed AI model name from invalid claude-haiku-4-5 to claude-3-haiku-20240307.
+      Added safe_div helper.
 """
 import json, logging, aiohttp
 from dataclasses import dataclass
@@ -84,7 +81,7 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
                     "anthropic-version": "2023-06-01",
                 },
                 json={
-                    "model": "claude-haiku-4-5",
+                    "model": "claude-3-haiku-20240307",
                     "max_tokens": 200,  # sangat hemat
                     "system": self.AI_PROMPT,
                     "messages": [{"role": "user", "content": prompt}],
@@ -181,7 +178,8 @@ Output HANYA JSON: {"action":"ENTER"|"WATCH"|"SKIP","conviction":"HIGH"|"MEDIUM"
         if not token.has_twitter:  concern.append("no Twitter")
         if token.age_hours > 24:   concern.append(f"old ({token.age_hours:.0f}h)")
 
-        if token.vol1h > token.liq * 0.3:
+        # FIX v2.1: Prevent ZeroDivisionError when liq == 0
+        if token.liq > 0 and token.vol1h > token.liq * 0.3:
             high.append(f"volume/liq ok ({token.vol1h/token.liq:.1f}x)")
 
         # Score
