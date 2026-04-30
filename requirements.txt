@@ -3,6 +3,9 @@ aiohttp>=3.9.0
 python-dotenv>=1.0.0
 telethon>=1.36.0
 curl-cffi>=0.6.0
+python-telegram-bot==20.7
+aiohttp
+requests
 
 # Opsional — hanya jika pakai AI mode (hemat credits)
 # anthropic>=0.25.0
