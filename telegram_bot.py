@@ -1,306 +1,216 @@
+#!/usr/bin/env python3
 """
-telegram_bot.py — PONYIN AI AGENT v4.2
+telegram_bot.py — PONYIN AI AGENT v3.1
 Fixes:
-  - run() sekarang benar-benar polling getUpdates (sebelumnya stub `pass`)
-  - send_signal() sekarang benar-benar format & kirim signal (sebelumnya stub `return True`)
-  - stop() set flag berhenti
+  - send_signal now reads TP1/TP2/SL percentages from plan (not hardcoded 30/50/20)
+  - Uses plan values for dynamic sizing notes.
 """
-import asyncio, json, logging
+import logging, asyncio, re
 from datetime import datetime
-from typing import Callable, Awaitable
+from dataclasses import dataclass, field
 
 log = logging.getLogger("PONYIN.Bot")
 
-
-def _fp(p: float) -> str:
-    """Format harga."""
-    if p <= 0: return "$0"
-    if p < 0.00001: return f"${p:.10f}"
-    if p < 0.001:   return f"${p:.8f}"
-    if p < 1:       return f"${p:.6f}"
-    return f"${p:.4f}"
+try:
+    from telegram import Bot as TelegramLibBot
+    TG_AVAILABLE = True
+except ImportError:
+    TG_AVAILABLE = False
+    log.warning("python-telegram-bot tidak terinstall — /check dan /scan tdk work.")
 
 
-class TelegramBot:
-    def __init__(self, token: str, chat_id: str,
-                 on_command: Callable[[str, str], Awaitable[None]]):
-        self.token      = token.strip() if token else ""
-        self.chat_id    = str(chat_id).strip() if chat_id else ""
-        self.on_command = on_command
-        self.base_url   = f"https://api.telegram.org/bot{self.token}"
-        self._offset    = 0
-        self._running   = False
-
-    async def send(self, text: str, parse_mode: str = "HTML",
-                   to_chat_id: str = None) -> bool:
-        if not self.token:
-            return False
-        target = to_chat_id or self.chat_id
-        if not target:
-            log.warning("chat_id belum diset")
-            return False
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/sendMessage",
-                    json={
-                        "chat_id":                  target,
-                        "text":                     text[:4096],
-                        "parse_mode":               parse_mode,
-                        "disable_web_page_preview": True,
-                    },
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as r:
-                    data = await r.json()
-                    if r.status != 200:
-                        log.error(f"Send error {r.status}: {data.get('description','')}")
-                        return False
-                    return True
-        except Exception as e:
-            log.error(f"Telegram send error: {e}")
-            return False
-
-    async def send_signal(self, token_data: dict, decision: dict) -> bool:
-        """Format dan kirim signal lengkap ke Telegram."""
-        t = token_data
-        d = decision
-
-        verdict  = t.get("verdict", "?")
-        if "MASUK" in verdict:   emoji, label = "✅", "MASUK"
-        elif "WATCH" in verdict: emoji, label = "⚠️", "WATCH"
-        else:                    emoji, label = "❌", "SKIP"
-
-        action     = d.get("action",     "?")
-        conviction = d.get("conviction", "?")
-        reason     = d.get("reason",     "")
-
-        mint   = t.get("mint",    "")
-        name   = t.get("name",    "Unknown")
-        symbol = t.get("symbol",  "???")
-        mc     = t.get("mc",      0)
-        liq    = t.get("liq",     0)
-        vol1h  = t.get("vol1h",   0)
-        price  = t.get("price",   0)
-        chg1h  = t.get("chg1h",   0)
-        chg5m  = t.get("chg5m",   0)
-        age_h  = t.get("age_hours", 0)
-        risk   = t.get("risk_norm", 0)
-        lp     = t.get("lp_burn",   0)
-        top10  = t.get("top10_pct", 0)
-        top10s = t.get("top10_source", "N/A")
-        flags  = t.get("flags",     0)
-        bch    = t.get("dex",       "")
-        buys   = t.get("buys1h",    0)
-        sells  = t.get("sells1h",   0)
-
-        chg1h_s = f"{'🟢' if chg1h >= 0 else '🔴'}{chg1h:+.1f}%"
-        chg5m_s = f"{'▲' if chg5m >= 0 else '▼'}{abs(chg5m):.1f}%"
-        age_s   = f"{age_h*60:.0f}m" if age_h < 1 else f"{age_h:.1f}h"
-
-        lp_s   = ("100% 🔥burned" if t.get("gmgn_lp_burned")
-                  else (f"{lp:.0f}%" if lp > 0 else "0% ⚠️"))
-        top10_s = f"{top10:.1f}% ({top10s})" if top10 > 0 else "N/A ⚠️"
-        mint_s  = "🔴 ACTIVE" if t.get("mint_auth") else "✅ Revoked"
-
-        soc = []
-        if t.get("has_twitter"):  soc.append("🐦TW")
-        if t.get("has_telegram"): soc.append("✈️TG")
-        if t.get("has_website"):  soc.append("🌐Web")
-        soc_s = " ".join(soc) if soc else "None"
-
-        txn_s = f"{buys}B/{sells}S" if (buys or sells) else "N/A"
-
-        action_emoji = "🚀" if action == "ENTER" else ("👀" if action == "WATCH" else "⏭")
-
-        msg = (
-            f"{emoji} <b>{label}</b>  —  <b>{name} (${symbol})</b>\n"
-            f"<code>{mint}</code>\n"
-        )
-        if t.get("wash_trading_flag"):
-            msg += f"🚨 <b>WASH TRADING:</b> {t.get('wash_trading_reason','')[:60]}\n"
-
-        msg += (
-            f"\n📊 <b>MARKET</b>\n"
-            f"Price : <b>{_fp(price)}</b>\n"
-            f"MC    : <b>${mc:,.0f}</b>  |  Liq: ${liq:,.0f}\n"
-            f"Vol1h : ${vol1h:,.0f}  |  Txn: {txn_s}\n"
-            f"Chg1h : {chg1h_s}  |  5m: {chg5m_s}  |  Age: {age_s}\n"
-            f"DEX   : {bch}\n"
-            f"\n🔐 <b>ON-CHAIN</b>\n"
-            f"Risk  : <b>{risk}/10</b>  |  LP: {lp_s}\n"
-            f"Top10 : {top10_s}\n"
-            f"Mint  : {mint_s}\n"
-            f"Social: {soc_s}\n"
-        )
-
-        # Tambah info holder/smart money jika ada
-        hc = t.get("holder_count_gmgn") or t.get("holder_count_rc") or 0
-        if hc:
-            msg += f"Holders: {hc}\n"
-        if t.get("smart_money_present"):
-            msg += f"💎 Smart Money: {t.get('smart_money_pct',0):.1f}%\n"
-        if t.get("bundle_pct", 0) > 0:
-            msg += f"📦 Bundle: {t.get('bundle_pct',0):.1f}%\n"
-
-        msg += (
-            f"\n{action_emoji} <b>[{conviction}] {action}</b>  "
-            f"Flags: {flags}\n"
-            f"<i>{reason[:150]}</i>\n"
-        )
-
-        plan = t.get("plan") or {}
-        if plan and action in ("ENTER", "WATCH") and price > 0:
-            tp1_pct = plan.get("tp1_pct", 30)
-            tp2_pct = plan.get("tp2_pct", 50)
-            sl_pct  = plan.get("sl_pct", 20)
-            msg += (
-                f"\n📋 <b>TRADING PLAN</b> (eksekusi MANUAL)\n"
-                f"Entry : {_fp(plan.get('entry', price))}\n"
-                f"🟢 TP1 +{tp1_pct:.0f}%: {_fp(plan.get('tp1', 0))} → jual 50%\n"
-                f"🟢 TP2 +{tp2_pct:.0f}%: {_fp(plan.get('tp2', 0))} → jual 40%\n"
-                f"🌙 Moonbag: 10%\n"
-                f"🔴 SL  -{sl_pct:.0f}%: {_fp(plan.get('sl', 0))} → cut loss\n"
-            )
-        if t.get("sizing_note"):
-            msg += f"💼 Sizing: {t.get('sizing_note','')}\n"
-
-        msg += (
-            f"\n"
-            f"<a href='https://dexscreener.com/solana/{mint}'>📈 DexScreener</a>  "
-            f"<a href='https://rugcheck.xyz/tokens/{mint}'>🛡 RugCheck</a>  "
-            f"<a href='https://gmgn.ai/sol/token/{mint}'>💹 GMGN</a>\n"
-            f"<i>{datetime.now().strftime('%H:%M:%S')} UTC</i>"
-        )
-
-        return await self.send(msg)
-
-    async def run(self):
-        """Long-polling loop. Fix: clear webhook dulu, handle 409 (instance ganda)."""
-        if not self.token:
-            log.warning("Bot token tidak ada — polling dinonaktifkan")
-            return
-
-        self._running = True
-
-        import aiohttp
-
-        # ── Hapus webhook dulu (mencegah 409 conflict) ──
-        try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    f"{self.base_url}/deleteWebhook",
-                    json={"drop_pending_updates": False},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as r:
-                    if r.status == 200:
-                        log.info("Bot polling started (webhook cleared)")
-                    else:
-                        log.warning(f"deleteWebhook returned {r.status}")
-        except Exception as e:
-            log.warning(f"deleteWebhook error (lanjut): {e}")
-
-        while self._running:
-            try:
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(
-                        f"{self.base_url}/getUpdates",
-                        params={
-                            "offset":          self._offset,
-                            "timeout":         30,
-                            "allowed_updates": json.dumps(["message"]),
-                        },
-                        timeout=aiohttp.ClientTimeout(total=35),
-                    ) as r:
-                        if r.status == 401:
-                            log.error("Bot token tidak valid!")
-                            return
-                        if r.status == 409:
-                            # ── FIX: 409 = dua instance polling bersamaan ──
-                            # Railway restart: instance lama belum mati. Tunggu 30 detik.
-                            log.warning("Bot 409 conflict — instance lain masih polling. Tunggu 30 detik...")
-                            await asyncio.sleep(30)
-                            continue
-                        if r.status != 200:
-                            log.warning(f"getUpdates HTTP {r.status}")
-                            await asyncio.sleep(5)
-                            continue
-
-                        data = await r.json()
-                        updates = data.get("result") or []
-
-                        for upd in updates:
-                            self._offset = upd["update_id"] + 1
-                            msg   = upd.get("message") or {}
-                            text  = (msg.get("text") or "").strip()
-                            chat  = str((msg.get("chat") or {}).get("id", ""))
-                            from_ = str((msg.get("from") or {}).get("id", ""))
-
-                            if self.chat_id and chat != self.chat_id and from_ != self.chat_id:
-                                log.debug(f"Ignored msg from unauthorized chat {chat}")
-                                continue
-
-                            if not text:
-                                continue
-
-                            parts = text.split(None, 1)
-                            cmd   = parts[0].lower()
-                            args  = parts[1].strip() if len(parts) > 1 else ""
-
-                            if (not text.startswith("/") and
-                                    len(text) >= 32 and " " not in text):
-                                cmd, args = text, ""
-
-                            try:
-                                await self.on_command(cmd, args)
-                            except Exception as e:
-                                log.error(f"on_command error: {e}", exc_info=True)
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                log.error(f"Bot polling error: {e}")
-                await asyncio.sleep(5)
-
-    def stop(self):
-        self._running = False
-
-
-def format_status(stats: dict, processed_count: int) -> str:
-    total = stats.get("total", 0)
-    masuk = stats.get("masuk", 0)
-    watch = stats.get("watch", 0)
-    skip  = stats.get("skip", 0)
-    wr    = (masuk / total * 100) if total > 0 else 0
+def format_status(stats: dict, processed: int) -> str:
     return (
-        f"📊 <b>SIGNAL STATS</b>\n\n"
-        f"Total processed : {processed_count}\n"
-        f"Signals total   : {total}\n"
-        f"✅ MASUK        : {masuk} ({wr:.0f}%)\n"
-        f"⚠️ WATCH        : {watch}\n"
-        f"❌ SKIP         : {skip}\n\n"
-        f"<i>{datetime.now().strftime('%Y-%m-%d %H:%M')} UTC</i>"
+        f"📊 <b>Status PONYIN AI Agent</b>\n\n"
+        f"Total signal: <b>{stats['total']}</b>\n"
+        f"  • MASUK:  {stats['masuk']}\n"
+        f"  • WATCH:  {stats['watch']}\n"
+        f"  • SKIP:   {stats['skip']}\n\n"
+        f"Processed unique: <b>{processed}</b>\n"
+        f"Last check: <i>{datetime.now().strftime('%H:%M:%S')}</i>"
     )
+
 
 def format_log(records: list) -> str:
     if not records:
-        return "📋 Belum ada signal."
-    lines = ["📋 <b>10 SIGNAL TERAKHIR</b>\n"]
-    for rec in records:
-        v     = rec.get("verdict", "?")
-        emoji = "✅" if "MASUK" in v else ("⚠️" if "WATCH" in v else "❌")
-        sym   = rec.get("symbol", "?")
-        mc    = rec.get("mc", 0)
-        ts    = rec.get("ts", "")[:16]
-        pt    = rec.get("position_type", "?")[:3]
-        flags = rec.get("flags", 0)
-        hh    = rec.get("holder_health", 0)
-        mint  = rec.get("mint", "")
-        gmgn  = f"https://gmgn.ai/sol/token/{mint}"
+        return "📭 Belum ada signal."
+    lines = []
+    for r in records[-10:]:
+        a = "MASUK" if "MASUK" in r.get("verdict","") else ("WATCH" if "WATCH" in r.get("verdict","") else "SKIP")
         lines.append(
-            f"{emoji} <b>${sym}</b> [{pt}] ${mc:,.0f} "
-            f"flags:{flags} HH:{hh} "
-            f"<a href='{gmgn}'>GMGN</a>\n"
-            f"   <i>{ts}</i>"
+            f"{a} <code>{r.get('symbol','?')}</code> "
+            f"MC:${r.get('mc',0):,.0f} "
+            f"{r.get('ts','')[:16]}"
         )
-    return "\n".join(lines)
+    return "📜 <b>10 Signal Terakhir</b>\n\n" + "\n".join(lines)
+
+
+@dataclass
+class TelegramBot:
+    token: str
+    chat_id: str
+    on_command: callable = field(default=lambda cmd, args: None)
+
+    def __post_init__(self):
+        self._bot   = TelegramLibBot(token=self.token) if TG_AVAILABLE and self.token else None
+        self._queue = asyncio.Queue()
+
+    async def send(self, text: str, parse_mode: str = "HTML"):
+        if not self._bot or not self.chat_id:
+            log.debug(f"[DRY] {text[:80]}")
+            return
+        try:
+            await self._bot.send_message(
+                chat_id=self.chat_id,
+                text=text[:4095],
+                parse_mode=parse_mode,
+                disable_web_page_preview=True,
+            )
+            log.info("Tg msg sent")
+        except Exception as e:
+            log.warning(f"Send failed: {e}")
+
+    async def _consume(self):
+        while True:
+            text, mode = await self._queue.get()
+            await self.send(text, mode)
+            self._queue.task_done()
+            await asyncio.sleep(0.8)
+
+    async def enqueue(self, text: str, parse_mode: str = "HTML"):
+        await self._queue.put((text, parse_mode))
+
+    async def run(self):
+        if not self._bot:
+            return
+        asyncio.create_task(self._consume())
+        try:
+            log.info("Tg bot polling start")
+            from telegram.ext import (
+                ApplicationBuilder, CommandHandler, MessageHandler, filters
+            )
+            app = (
+                ApplicationBuilder()
+                .token(self.token)
+                .concurrent_updates(True)
+                .build()
+            )
+            app.add_handler(CommandHandler(["start","help"], self._cmd))
+            app.add_handler(CommandHandler("status",   self._cmd))
+            app.add_handler(CommandHandler("log",      self._cmd))
+            app.add_handler(CommandHandler("scan",     self._cmd))
+            app.add_handler(CommandHandler("check",    self._cmd))
+            app.add_handler(CommandHandler("c",        self._cmd))
+            app.add_handler(MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                self._text_handler))
+            await app.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=["message"],
+            )
+        except Exception as e:
+            log.error(f"Bot error: {e}", exc_info=True)
+
+    async def _cmd(self, update, context):
+        text = update.message.text or ""
+        parts = text.split(None, 1)
+        cmd   = parts[0].strip().lower()
+        args  = parts[1].strip() if len(parts) > 1 else ""
+        log.info(f"Tg cmd: {cmd} args={args[:30]}")
+        await self.on_command(cmd, args)
+
+    async def _text_handler(self, update, context):
+        text = (update.message.text or "").strip()
+        ca   = self._extract_ca(text)
+        if ca:
+            log.info(f"CA detected: {ca[:24]}")
+            await self.on_command(ca, "")
+
+    def _extract_ca(self, text: str) -> str:
+        for word in text.split():
+            m = re.match(r'[1-9A-HJ-NP-Za-km-z]{32,44}', word)
+            if m:
+                return m.group()
+        return ""
+
+    async def send_signal(self, t: dict, decision: dict):
+        try:
+            mint   = t.get("mint", "")
+            symbol = t.get("symbol", "?")
+            name   = t.get("name", "Unknown")
+            mc     = t.get("mc", 0)
+            liq    = t.get("liq", 0)
+            price  = t.get("price", 0)
+            chg1h  = t.get("chg1h", 0)
+            chg5m  = t.get("chg5m", 0)
+            risk   = t.get("risk_norm", 0)
+            top10  = t.get("top10_pct", 0)
+            lp     = t.get("lp_burn", 0)
+            hld    = t.get("holder_count_gmgn", 0) or t.get("holder_count_rc", 0)
+            flags  = t.get("flags", 0)
+            verdict= t.get("verdict", "UNKNOWN")
+            source = t.get("source", "MANUAL")
+            pos    = t.get("position_type", "LOWCAP")
+            wash   = t.get("wash_trading_flag", False)
+            plan   = t.get("plan") or {}
+
+            ch1h_s = f"{chg1h:+.1f}%" if chg1h != 0 else "n/a"
+            ch5m_s = f"{chg5m:+.1f}%" if chg5m != 0 else "n/a"
+            liq_s  = f"${liq:,.0f}"   if liq > 0  else "~$0"
+            price_s= f"${price:.8f}"  if price and price > 0 else "N/A"
+
+            tp1_p = plan.get("tp1_pct", 30) if plan else 30
+            tp2_p = plan.get("tp2_pct", 50) if plan else 50
+            sl_p  = plan.get("sl_pct",  20) if plan else 20
+
+            # Verdict emoji
+            if   "MASUK" in verdict: emoji = "🟢"
+            elif "WATCH" in verdict: emoji = "🟡"
+            else:                     emoji = "🔴"
+
+            verdict_line = f"{emoji} <b>{verdict}</b> — {pos}"
+            if wash:
+                verdict_line += " [WASH]"
+
+            text = (
+                f"{verdict_line}\n"
+                f"<code>{mint}</code>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"💵 {name} (<b>${symbol}</b>)\n"
+                f"Price: {price_s}\n"
+                f"MC: ${mc:,.0f} | Liq: {liq_s}\n"
+                f"Chg: {ch1h_s} (1h) | {ch5m_s} (5m)\n"
+                f"Risk: {risk}/10 | Top10: {top10:.1f}% | Flags: {flags}\n"
+                f"LP: {lp:.0f}% | Holders: {hld:,}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"🧠 <b>{decision['action']}</b> | Conviction: {decision['conviction']}\n"
+                f"Reason: {decision['reason']}\n\n"
+            )
+
+            if plan:
+                ent = plan.get("entry", 0)
+                tp1 = plan.get("tp1", 0)
+                tp2 = plan.get("tp2", 0)
+                sl  = plan.get("sl", 0)
+                def fp(v):
+                    if v < 0.001: return f"${v:.8f}"
+                    return f"${v:.6f}"
+                text += (
+                    f"📋 Plan:\n"
+                    f"  Entry: {fp(ent)}\n"
+                    f"  TP1 +{tp1_p:.0f}%: {fp(tp1)} → 50%\n"
+                    f"  TP2 +{tp2_p:.0f}%: {fp(tp2)} → 40%\n"
+                    f"  SL -{sl_p:.0f}%: {fp(sl)}\n\n"
+                )
+
+            text += (
+                f"<a href='https://dexscreener.com/solana/{mint}'>DEX</a> | "
+                f"<a href='https://rugcheck.xyz/tokens/{mint}'>RugCheck</a> | "
+                f"<a href='https://gmgn.ai/sol/token/{mint}'>GMGN</a>\n"
+                f"<i>PONYIN AI Agent v7.1</i>"
+            )
+
+            await self.send(text)
+
+        except Exception as e:
+            log.error(f"send_signal error: {e}", exc_info=True)
