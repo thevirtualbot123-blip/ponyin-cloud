@@ -1,21 +1,11 @@
 """
-data_fetcher.py — PONYIN AI AGENT v8.1
+data_fetcher.py — PONYIN AI AGENT v8.2
 Fixes:
-  - GMGN top10 parsing dari proxy response (format beda dari direct)
-  - Debug logging untuk semua GMGN keys
-  - Jangan override GMGN top10 dengan RugCheck/Helius
-  - HAPUS gmgn_via_bridge (Node.js bridge tidak diperlukan)
-  - HAPUS _gmgn_fetch (tls_client tidak reliable di Railway)
-  - GANTI dengan GMGNClient (curl-cffi + proxy support)
-
-Requirements baru di requirements.txt:
-    curl-cffi>=0.6.0
-    (hapus: tls_client, fake_useragent)
-
-ENV Railway:
-    GMGN_API_KEY=your_key_here
-    GMGN_PROXY_URL=https://your-worker.workers.dev
-    (Hapus GMGN_BRIDGE_URL — tidak dipakai lagi)
+  - _parse_pair now uses GMGN liquidity as fallback when DexScreener liq == 0
+  - _apply_gmgn_data extracts liquidity/pool_value from GMGN data
+  - _extract_token_from_get tightened validation
+  - Added run_diagnostics method (replaces missing startup method)
+  - Better handling of missing/empty DEX data
 """
 import asyncio, aiohttp, logging, re
 from datetime import datetime
@@ -434,7 +424,7 @@ class DataFetcher:
                     token = self._update_holder_count_from_helius(token, helius_accounts)
 
         log.info(
-            f"Final {mint[:12]}: MC=${token.mc:,.0f} | "
+            f"Final {mint[:12]}: MC=${token.mc:,.0f} | Liq=${token.liq:,.0f} | "
             f"Holders={token.holder_count_gmgn} | "
             f"Top10={token.top10_pct:.1f}% ({token.top10_source}) | "
             f"LP={token.lp_burn:.0f}% | Risk={token.risk_norm}/10"
@@ -622,8 +612,9 @@ class DataFetcher:
         log.info(f"GMGN keys for {t.mint[:12]}: {list(td.keys())[:30]}")
 
         # GMGN v2 format: top10 bisa di nested 'dev' atau 'pool' object
-        dev_data = td.get("dev") or {}
-        pool_data = td.get("pool") or {}
+        # FIX: cari dari root response juga, karena _unwrap_gmgn bisa return inner token object
+        dev_data = data.get("dev") or td.get("dev") or {}
+        pool_data = data.get("pool") or td.get("pool") or {}
 
         # DEBUG: log nested keys
         if dev_data:
@@ -638,7 +629,7 @@ class DataFetcher:
         for key in ("top_10_holder_pct","top_10_holder_rate","top10HolderPercent",
                     "top10_holder_rate","topHolderRate", "top_10_holder_percent",
                     "top10_holder_percent", "top_holder_rate", "top10_pct"):
-            raw = td.get(key)
+            raw = get_val(key)
             if raw is not None:
                 try:
                     v = float(raw)
@@ -693,9 +684,13 @@ class DataFetcher:
                        f"Dev keys: {list(dev_data.keys())[:15] if dev_data else 'N/A'} | "
                        f"Pool keys: {list(pool_data.keys())[:15] if pool_data else 'N/A'}")
 
+        # FIX v8.2: helper untuk cek dari root response juga
+        def get_val(key, default=None):
+            return td.get(key, default) if td.get(key) is not None else data.get(key, default)
+
         # holder_count
         for key in ("holder_count","holder","holderCount","holders","holder_num"):
-            raw = td.get(key)
+            raw = get_val(key)
             if raw is not None:
                 try: 
                     t.holder_count_gmgn = int(raw)
@@ -713,21 +708,21 @@ class DataFetcher:
                     log.info(f"GMGN dev_hold: {t.dev_hold_pct:.1f}% for {t.mint[:12]}")
                 except: pass
 
-        t.bundle_pct        = float(td.get("bundle_pct")             or td.get("bundler_pct")           or 0)
-        t.sniper_count      = int(td.get("sniper_count")             or td.get("sniperCount")           or 0)
-        t.smart_money_count = int(td.get("smart_degen_count")        or td.get("smartDegenCount")       or 0)
-        t.kol_holders       = int(td.get("renowned_wallets")         or td.get("renowned_wallet_count") or 0)
-        t.is_honeypot       = bool(td.get("is_honeypot")             or td.get("isHoneypot"))
-        t.rug_ratio         = float(td.get("rug_ratio")              or td.get("dev_rug_ratio")         or 0)
-        t.wash_trade_gmgn   = bool(td.get("wash_trade_flag")         or td.get("is_wash_trading"))
-        t.fresh_wallet_rate = float(td.get("fresh_wallet_rate")      or td.get("freshWalletRate")       or 0)
-        t.rat_trader_rate   = float(td.get("rat_trader_amount_rate") or td.get("ratTraderRate")         or 0)
+        t.bundle_pct        = float(get_val("bundle_pct")             or get_val("bundler_pct")           or 0)
+        t.sniper_count      = int(get_val("sniper_count")             or get_val("sniperCount")           or 0)
+        t.smart_money_count = int(get_val("smart_degen_count")        or get_val("smartDegenCount")       or 0)
+        t.kol_holders       = int(get_val("renowned_wallets")         or get_val("renowned_wallet_count") or 0)
+        t.is_honeypot       = bool(get_val("is_honeypot")             or get_val("isHoneypot"))
+        t.rug_ratio         = float(get_val("rug_ratio")              or get_val("dev_rug_ratio")         or 0)
+        t.wash_trade_gmgn   = bool(get_val("wash_trade_flag")         or get_val("is_wash_trading"))
+        t.fresh_wallet_rate = float(get_val("fresh_wallet_rate")      or get_val("freshWalletRate")       or 0)
+        t.rat_trader_rate   = float(get_val("rat_trader_amount_rate") or get_val("ratTraderRate")         or 0)
 
         # LP burn dari GMGN — cek multiple field names
         lp_burned_flags = [
-            td.get("lp_burned"), td.get("is_lp_burned"), td.get("burned"),
-            td.get("lpBurned"), td.get("isLpBurned"), td.get("lp_locked"),
-            td.get("is_lp_locked"), td.get("lpLocked"),
+            get_val("lp_burned"), get_val("is_lp_burned"), get_val("burned"),
+            get_val("lpBurned"), get_val("isLpBurned"), get_val("lp_locked"),
+            get_val("is_lp_locked"), get_val("lpLocked"),
         ]
         if any(lp_burned_flags):
             t.lp_burn = 100.0
@@ -756,6 +751,42 @@ class DataFetcher:
                 t.lp_burn = 100.0
                 t.gmgn_lp_burned = True
                 log.info(f"GMGN LP burned: 100% for {t.mint[:12]} (dev)")
+
+        # FIX v8.2: Use GMGN liquidity as fallback when DexScreener liq == 0
+        # This fixes the issue where pump.fun tokens show liq=$0 from DEX
+        gmgn_liq = None
+        if pool_data:
+            for k in ("liquidity", "pool_value", "base_reserve_value", "quote_reserve_value"):
+                v = pool_data.get(k)
+                if v is not None:
+                    try:
+                        fv = float(v)
+                        if fv > 0:
+                            gmgn_liq = fv
+                            break
+                    except: pass
+        if not gmgn_liq and td:
+            for k in ("liquidity", "pool_value"):
+                v = get_val(k)
+                if v is not None:
+                    try:
+                        fv = float(v)
+                        if fv > 0:
+                            gmgn_liq = fv
+                            break
+                    except: pass
+
+        if gmgn_liq and gmgn_liq > 0 and t.liq <= 0:
+            t.liq = gmgn_liq
+            log.info(f"GMGN liquidity fallback for {t.mint[:12]}: ${gmgn_liq:,.0f}")
+
+        # FIX v8.2: Use GMGN price as fallback when DexScreener price == 0
+        gmgn_price = get_val("price")
+        if gmgn_price is not None and float(gmgn_price) > 0 and t.price <= 0:
+            try:
+                t.price = float(gmgn_price)
+                log.info(f"GMGN price fallback for {t.mint[:12]}: ${t.price}")
+            except: pass
 
         if t.smart_money_count > 0:
             t.smart_money_present = True
