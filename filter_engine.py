@@ -16,7 +16,7 @@ def safe_div(numerator: float, denominator: float, default: float = 0.0) -> floa
         return default
     try:
         result = numerator / denominator
-        # Cek apakah hasilnya infinity atau NaN
+        import math
         if math.isinf(result) or math.isnan(result):
             return default
         return result
