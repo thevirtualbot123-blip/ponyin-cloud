@@ -1,6 +1,6 @@
 """
 config.py — Konfigurasi PONYIN AI AGENT v7.1
-Tambahan: GMGN_PROXY_URL
+Tambahan: GMGN_PROXY_URL, TELETHON_SESSION
 """
 import os
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ class AgentConfig:
     TG_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
     TG_PHONE:    str = os.getenv("TELEGRAM_PHONE",    "")
     TG_SESSION:  str = os.getenv("TG_SESSION",        "ponyin_agent")
+    TELETHON_SESSION: str = os.getenv("TELETHON_SESSION", "")
 
     _SIGNAL_CHANNELS_RAW: str = os.getenv("SIGNAL_CHANNELS", "")
 
