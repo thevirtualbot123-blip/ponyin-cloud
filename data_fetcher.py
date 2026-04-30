@@ -1,12 +1,12 @@
 """
-data_fetcher.py — Fetch token data from various sources with error handling.
+data_fetcher.py — Fetch token data dari GMGN dengan error handling.
 """
-import asyncio, logging, json, aiohttp
+import asyncio
+import logging
+import json
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-from filter_engine import Token, safe_div
-from gmgn_client import GMGNClient
-from config import AgentConfig
+from filter_engine import Token
 
 log = logging.getLogger("PONYIN.DataFetcher")
 
@@ -17,208 +17,176 @@ class FetchedData:
     raw_data: str
 
 class DataFetcher:
-    def __init__(self, cfg: AgentConfig):
+    def __init__(self, cfg):
         self.cfg = cfg
-        self.gmgn = GMGNClient(cfg.GMGN_API_KEY)
-        
-        # Semaphore untuk membatasi concurrent requests
-        self.semaphore = asyncio.Semaphore(cfg.MAX_CONCURRENT_REQUESTS)
-        
-        # Session untuk HTTP requests
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.gmgn = None  # Akan diinisialisasi di start()
+        self.semaphore = asyncio.Semaphore(getattr(cfg, 'MAX_CONCURRENT_REQUESTS', 5))
 
     async def start(self):
-        """Initialize the data fetcher."""
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30),
-            connector=aiohttp.TCPConnector(limit=20)
-        )
+        """Initialize data fetcher and GMGN client."""
+        from gmgn_client import GMGNClient
+        self.gmgn = GMGNClient(self.cfg.GMGN_API_KEY)
+        await self.gmgn.start()
+        log.info("DataFetcher initialized with GMGN client")
 
     async def stop(self):
         """Cleanup resources."""
-        if self.session:
-            await self.session.close()
+        if self.gmgn:
+            await self.gmgn.close()
 
     async def fetch_new_tokens(self) -> List[FetchedData]:
-        """Fetch new tokens from all configured sources."""
-        tasks = []
+        """Fetch new tokens from GMGN."""
+        if not self.gmgn:
+            log.error("GMGN client not initialized")
+            return []
         
-        # Add GMGN fetching task
-        if self.cfg.GMGN_API_KEY:
-            tasks.append(self._fetch_from_gmgn())
-        
-        # Tambahkan source lain di sini jika diperlukan
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Gabungkan semua hasil
-        all_data = []
-        for result in results:
-            if isinstance(result, Exception):
-                log.error(f"Error fetching from source: {result}")
-                continue
-            if result:
-                all_data.extend(result)
-                
-        return all_data
-
-    async def _fetch_from_gmgn(self) -> List[FetchedData]:
-        """Fetch new tokens from GMGN API."""
-        async with self.semaphore:
-            try:
-                # Ambil pool data dari GMGN
-                pools = await self.gmgn.get_new_pools(
-                    limit=self.cfg.FETCH_LIMIT,
-                    sort_by="created_timestamp",
-                    order="desc"
-                )
-                
-                if not pools:
-                    log.info("No new pools found from GMGN")
-                    return []
-                
-                # Ambil detail untuk setiap pool
-                detailed_pools = []
-                for pool in pools:
-                    try:
-                        # Ambil detail pool
-                        pool_detail = await self.gmgn.get_pool_detail(pool['address'])
-                        
-                        # Ambil token info dari chain
-                        token_info = await self._get_token_info_from_chain(pool['token_address'])
-                        
-                        # Gabungkan data
-                        combined_data = {**pool, **pool_detail, **(token_info or {})}
-                        detailed_pools.append(combined_data)
-                        
-                        # Delay kecil untuk rate limiting
-                        await asyncio.sleep(0.1)
-                        
-                    except Exception as e:
-                        log.error(f"Error getting detail for pool {pool.get('address', 'unknown')}: {e}")
-                        continue
-                
-                # Konversi ke Token objects
-                fetched_data = []
-                for pool_data in detailed_pools:
-                    try:
-                        token = self._parse_gmgn_data(pool_data)
-                        if token:
-                            raw_str = json.dumps(pool_data, indent=2)[:500]  # Batasi panjang raw
-                            fetched_data.append(FetchedData(token, "GMGN", raw_str))
-                    except Exception as e:
-                        log.error(f"Error parsing GMGN data: {e}")
-                        continue
-                        
-                log.info(f"Fetched {len(fetched_data)} tokens from GMGN")
-                return fetched_data
-                
-            except Exception as e:
-                log.error(f"Error fetching from GMGN: {e}")
-                return []
-
-    def _parse_gmgn_data(self, data: Dict[str, Any]) -> Optional[Token]:
-        """Parse GMGN API response to Token object."""
         try:
-            # Extract basic info
-            address = data.get('address', '')
-            token_addr = data.get('token_address', '')
-            name = data.get('token_name', 'Unknown')
-            symbol = data.get('token_symbol', 'UNKNOWN')
+            # Ambil pool baru dari GMGN
+            pools = await self.gmgn.get_new_pools(
+                limit=getattr(self.cfg, 'FETCH_LIMIT', 10),
+                sort_by="created_at",
+                order="desc"
+            )
             
-            # Safely extract numeric values with defaults
-            price = float(data.get('price', 0) or 0)
-            market_cap = float(data.get('market_cap', 0) or 0)
+            if not pools:
+                log.info("No new pools from GMGN")
+                return []
             
-            # Safely extract liquidity with fallback
-            liquidity = data.get('liquidity', {})
-            liq_usd = float(liquidity.get('usd', 0) or 0)
-            # Fallback jika liquidity kosong atau tidak valid
-            if liq_usd <= 0:
-                # Coba ambil dari field lain
-                liq_field = data.get('liquidity_usd') or data.get('total_liquidity') or 1.0
-                liq_usd = float(liq_field) if liq_field else 1.0
+            log.info(f"Processing {len(pools)} pools from GMGN")
             
-            # Volume and changes
-            volume_1h = float(data.get('volume_1h', 0) or 0)
-            price_change_1h = float(data.get('price_change_1h', 0) or 0)
+            results = []
+            for pool in pools:
+                try:
+                    token = self._parse_pool_to_token(pool)
+                    if token:
+                        raw_str = json.dumps(pool, indent=2)[:500]
+                        results.append(FetchedData(token=token, source="GMGN", raw_data=raw_str))
+                except Exception as e:
+                    log.error(f"Error parsing pool: {e}")
+                    continue
+            
+            log.info(f"Successfully parsed {len(results)} tokens from GMGN")
+            return results
+            
+        except Exception as e:
+            log.error(f"Error in fetch_new_tokens: {e}", exc_info=True)
+            return []
+
+    def _parse_pool_to_token(self, pool: Dict[str, Any]) -> Optional[Token]:
+        """Parse GMGN pool data to Token object."""
+        try:
+            # Ekstrak data dasar dengan safe access
+            base_token = pool.get("base_token", {})
+            quote_token = pool.get("quote_token", {})
+            pool_info = pool.get("pool_info", {})
+            
+            # Address dan symbol
+            address = base_token.get("address", "")
+            symbol = base_token.get("symbol", "UNKNOWN")
+            name = base_token.get("name", "Unknown Token")
+            
+            # Price dan Market Cap
+            price_usd = float(pool_info.get("price_usd", 0) or 0)
+            market_cap = float(pool_info.get("market_cap", 0) or 0)
+            
+            # Liquidity - CRITICAL: Pastikan tidak None atau 0
+            liquidity_usd = pool_info.get("liquidity_usd")
+            if liquidity_usd is None:
+                liquidity_usd = float(pool_info.get("liquidity", 0) or 0)
+            else:
+                liquidity_usd = float(liquidity_usd)
+            
+            # Fallback jika masih 0 atau negatif
+            if liquidity_usd <= 0:
+                liquidity_usd = 1.0  # Minimum 1 USD untuk avoid division by zero
+                log.warning(f"Liquidity was 0/None for {symbol}, set to 1.0")
+            
+            # Volume 1h dan price change
+            volume_24h = float(pool_info.get("volume_24h", 0) or 0)
+            # Estimasi volume 1h dari 24h (asumsi distribusi merata)
+            volume_1h = volume_24h / 24.0
+            
+            price_change_24h = float(pool_info.get("price_change_24h", 0) or 0)
+            # Estimasi 1h change
+            price_change_1h = price_change_24h / 24.0
             
             # Transactions
-            tx_stats = data.get('tx_stats', {})
-            buys_1h = int(tx_stats.get('buys_1h', 0) or 0)
-            sells_1h = int(tx_stats.get('sells_1h', 0) or 0)
+            txns_24h = int(pool_info.get("txns_24h", 0) or 0)
+            buys_24h = int(pool_info.get("buys_24h", 0) or 0)
+            sells_24h = int(pool_info.get("sells_24h", 0) or 0)
             
-            # Top holders and risk
-            top_holders = data.get('top_holders', [])
-            top10_pct = float(data.get('top_10_holder_percent', 0) or 0)
+            # Estimasi per jam
+            buys_1h = max(1, buys_24h // 24)
+            sells_1h = max(0, sells_24h // 24)
             
-            # Safely calculate risk (avoid division by zero)
-            total_supply = float(data.get('total_supply', 1) or 1)
-            risk_score = float(data.get('risk_score', 5) or 5)
+            # Holder concentration
+            holder_count = int(pool_info.get("holder_count", 0) or 0)
+            top_10_percent = float(pool_info.get("top_10_holder_percent", 0) or 0)
             
-            # Calculate age in hours
-            created_ts = data.get('created_timestamp')
-            age_hours = 0
-            if created_ts:
-                from datetime import datetime
-                try:
-                    # Convert timestamp to age
-                    import time
-                    current_ts = time.time()
-                    age_seconds = current_ts - float(created_ts)
-                    age_hours = max(0, age_seconds / 3600)
-                except:
-                    age_hours = 0
+            # Risk score (0-10)
+            risk_score = float(pool_info.get("risk_score", 5) or 5)
             
-            # LP burn percentage
-            lp_burn_percent = float(data.get('lp_burn_percent', 0) or 0)
+            # Age calculation
+            created_at = pool_info.get("created_at", 0)
+            import time
+            current_time = time.time()
+            age_hours = max(0, (current_time - created_at) / 3600) if created_at > 0 else 0
             
-            # Mint authority status
-            mint_authority = data.get('mint_authority')
-            if mint_authority is not None and mint_authority == "":
-                mint_authority = "revoked"
-                
-            # Create Token instance
+            # LP Burn
+            lp_burn_percent = float(pool_info.get("lp_burn_percent", 0) or 0)
+            
+            # Mint authority
+            mint_auth = base_token.get("mint_authority")
+            if mint_auth == "" or mint_auth is None:
+                mint_auth = "revoked"
+            
+            # Buy/sell ratio
+            total_tx = buys_1h + sells_1h
+            buy_sell_ratio = buys_1h / total_tx if total_tx > 0 else 0.5
+            
+            # Create Token object
             token = Token(
                 address=address,
-                token_address=token_addr,
+                token_address=address,
                 name=name,
                 symbol=symbol,
-                price=price,
+                price=price_usd,
                 mc=market_cap,
-                liq=liq_usd,
+                liq=liquidity_usd,  # Sudah dijamin > 0
                 vol1h=volume_1h,
                 chg1h=price_change_1h,
                 buys1h=buys_1h,
                 sells1h=sells_1h,
-                top10_pct=top10_pct,
+                top10_pct=top_10_percent,
                 risk_norm=risk_score,
                 age_hours=age_hours,
                 lp_burn=lp_burn_percent,
-                mint_auth=mint_authority,
-                has_twitter=bool(data.get('twitter')),
-                buy_sell_ratio=safe_div(buys_1h, (buys_1h + sells_1h), 0.5),  # Default 0.5 jika 0/0
-                price_native=price,  # Gunakan price sebagai native price
+                mint_auth=mint_auth,
+                has_twitter=bool(base_token.get("twitter")),
+                buy_sell_ratio=buy_sell_ratio,
+                price_native=price_usd,
+                plan=None,
+                flags=0,
+                filter_details=[],
+                wash_trading_flag=False,
+                wash_trading_reason=None
             )
             
             # Hitung plan entry jika harga valid
-            if price > 0:
-                cfg = self.cfg
+            if price_usd > 0:
+                tp1_pct = getattr(self.cfg, 'TP1_PCT', 30)
+                tp2_pct = getattr(self.cfg, 'TP2_PCT', 100)
+                sl_pct = getattr(self.cfg, 'SL_PCT', 15)
+                
                 token.plan = {
-                    'entry': price,
-                    'tp1': price * (1 + cfg.TP1_PCT / 100),
-                    'tp2': price * (1 + cfg.TP2_PCT / 100),
-                    'sl': price * (1 - cfg.SL_PCT / 100),
+                    'entry': price_usd,
+                    'tp1': price_usd * (1 + tp1_pct / 100),
+                    'tp2': price_usd * (1 + tp2_pct / 100),
+                    'sl': price_usd * (1 - sl_pct / 100),
                 }
             
             return token
             
         except Exception as e:
-            log.error(f"Error parsing GMGN data: {e}")
+            log.error(f"Error parsing pool to token: {e}", exc_info=True)
             return None
-
-    async def _get_token_info_from_chain(self, token_address: str) -> Optional[Dict[str, Any]]:
-        """Get additional token info directly from Solana chain if needed."""
-        # Implementation would go here if we need direct RPC calls
-        # For now, return None as GMGN usually provides sufficient data
-        return None
