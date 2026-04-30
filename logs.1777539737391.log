@@ -1,0 +1,1001 @@
+2026-04-30T03:43:33.814719321Z [inf]    [92mTP2 +50%: $0.00004033 → jual 40% posisi[0m
+2026-04-30T03:43:33.814723913Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T03:43:33.814728161Z [inf]    [91mSL  -20%: $0.00002151 → cut loss[0m
+2026-04-30T03:45:34.505470985Z [err]  2026-04-30 03:45:32,882 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T03:48:14.432992239Z [err]  2026-04-30 03:48:11,507 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T03:52:04.681136552Z [err]  2026-04-30 03:52:04,428 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T03:57:15.544364995Z [err]  2026-04-30 03:57:13,270 | INFO | Got difference for account updates
+2026-04-30T03:57:15.544373582Z [err]  2026-04-30 03:57:13,461 | INFO | Got difference for channel 3743596916 updates
+2026-04-30T03:57:15.544377683Z [err]  2026-04-30 03:57:13,649 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T04:01:46.236570361Z [err]  2026-04-30 04:01:39,376 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:02:45.947063915Z [err]  2026-04-30 04:02:39,365 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:08:47.754635339Z [err]  2026-04-30 04:08:39,416 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:16:19.525738700Z [err]  2026-04-30 04:16:17,552 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:19:39.726573615Z [err]  2026-04-30 04:19:39,583 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:25:10.699287020Z [err]  2026-04-30 04:25:04,918 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:26:40.385374632Z [err]  2026-04-30 04:26:31,323 | INFO | Got difference for channel 3743596916 updates
+2026-04-30T04:31:11.737389332Z [err]  2026-04-30 04:31:07,611 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:33:21.467997598Z [err]  2026-04-30 04:33:12,079 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T04:33:41.081732663Z [err]  2026-04-30 04:33:33,337 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T04:36:41.674478423Z [err]  2026-04-30 04:36:33,566 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:41:52.823193364Z [err]  2026-04-30 04:41:50,906 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:42:22.468699008Z [err]  2026-04-30 04:42:13,858 | INFO | Got difference for account updates
+2026-04-30T04:43:42.475875662Z [err]  2026-04-30 04:43:40,681 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T04:47:43.815743460Z [err]  2026-04-30 04:47:36,306 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T04:49:33.553280408Z [err]  2026-04-30 04:49:27,501 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:53:44.375066675Z [err]  2026-04-30 04:53:39,882 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T04:56:34.666043449Z [err]  2026-04-30 04:56:31,771 | INFO | Got difference for channel 3743596916 updates
+2026-04-30T04:57:14.336751872Z [err]  2026-04-30 04:57:14,071 | INFO | Got difference for account updates
+2026-04-30T05:01:05.278500647Z [err]  2026-04-30 05:01:00,559 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:02:44.973098156Z [err]  2026-04-30 05:02:36,516 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T05:03:14.603614548Z [err]  2026-04-30 05:03:12,491 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T05:05:44.987260867Z [err]  2026-04-30 05:05:37,345 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:09:45.433202640Z [err]  2026-04-30 05:09:40,017 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:10:55.150797245Z [err]  2026-04-30 05:10:54,845 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T05:12:15.402632880Z [err]  2026-04-30 05:12:14,263 | INFO | Got difference for account updates
+2026-04-30T05:16:06.693487977Z [err]  2026-04-30 05:15:58,997 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:17:46.377056274Z [err]  2026-04-30 05:17:36,748 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T05:22:27.633643878Z [err]  2026-04-30 05:22:24,350 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:23:27.318075036Z [err]  2026-04-30 05:23:17,431 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T05:26:58.152530748Z [err]  2026-04-30 05:26:52,073 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:27:17.846387368Z [err]  2026-04-30 05:27:14,485 | INFO | Got difference for account updates
+2026-04-30T05:28:27.893576440Z [err]  2026-04-30 05:28:25,541 | INFO | GMGN proxy POST OK: 6m7z4UNR7Lhs
+2026-04-30T05:28:27.893581592Z [inf]  
+2026-04-30T05:28:27.893583977Z [err]  2026-04-30 05:28:25,884 | INFO | Sources 6m7z4UNR7Lhs: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T05:28:27.893590582Z [inf]  ┌ MC: 29.1K - Age...[0m
+2026-04-30T05:28:27.893592045Z [err]  2026-04-30 05:28:25,885 | INFO | GMGN keys for 6m7z4UNR7Lhs: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T05:28:27.893596360Z [inf]  [2mFetching: 6m7z4UNR7Lhsd3qfHBf5EWsF...[0m
+2026-04-30T05:28:27.893600738Z [err]  2026-04-30 05:28:25,354 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T05:28:27.893607073Z [err]  2026-04-30 05:28:25,355 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 OpenGithub (OpenGithub)  CuaDFXcxt7MV5awapFuQvfQwThA743Cs7e53b1cZpump  ┌ MC: 3
+2026-04-30T05:28:27.893616262Z [err]  2026-04-30 05:28:25,540 | INFO | GMGN proxy POST status: 200 | len=3610
+2026-04-30T05:28:27.893629436Z [err]  2026-04-30 05:28:25,353 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Brain (BRAIN)  6m7z4UNR7Lhsd3qfHBf5EWsFfpLsWdFxW5YHuEQWpump  ┌ MC: 29.1K - Age
+2026-04-30T05:28:27.893633331Z [inf]  
+2026-04-30T05:28:27.893636179Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T05:28:27.893639697Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m05:28:25[0m
+2026-04-30T05:28:27.893643236Z [inf]  [2m💊 Brain (BRAIN) 
+2026-04-30T05:28:27.893646362Z [inf]  6m7z4UNR7Lhsd3qfHBf5EWsFfpLsWdFxW5YHuEQWpump
+2026-04-30T05:28:27.894848207Z [err]  2026-04-30 05:28:25,885 | INFO | GMGN dev keys for 6m7z4UNR7Lhs: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T05:28:27.894854371Z [err]  2026-04-30 05:28:25,885 | INFO | GMGN pool keys for 6m7z4UNR7Lhs: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T05:28:27.894858172Z [err]  2026-04-30 05:28:25,885 | INFO | GMGN top10 (dev): 25.2% for 6m7z4UNR7Lhs (key=top_10_holder_rate)
+2026-04-30T05:28:27.894861595Z [err]  2026-04-30 05:28:25,885 | INFO | GMGN holders: 181 for 6m7z4UNR7Lhs (key=holder_count)
+2026-04-30T05:28:27.894865536Z [err]  2026-04-30 05:28:25,885 | INFO | RugCheck top10 skipped — GMGN already set: 25.2%
+2026-04-30T05:28:27.894875316Z [err]  2026-04-30 05:28:26,099 | INFO | Helius: 181 raw accounts for 6m7z4UNR7Lhs
+2026-04-30T05:28:27.894878931Z [err]  2026-04-30 05:28:26,186 | INFO | Final 6m7z4UNR7Lhs: MC=$22,774 | Holders=181 | Top10=25.2% (GMGN) | LP=100% | Risk=0.0/10
+2026-04-30T05:28:27.894881837Z [err]  2026-04-30 05:28:26,186 | INFO | Filter skipped top10 override — GMGN already set: 25.2%
+2026-04-30T05:28:27.894888450Z [err]  2026-04-30 05:28:26,186 | ERROR | process_signal error: float division by zero
+2026-04-30T05:28:27.894892434Z [err]  Traceback (most recent call last):
+2026-04-30T05:28:27.894898270Z [err]    File "/app/agent.py", line 112, in process_signal
+2026-04-30T05:28:27.896359920Z [err]      token, decision = await asyncio.wait_for(
+2026-04-30T05:28:27.896360730Z [err]    File "/app/decision_engine.py", line 185, in _rule_decide
+2026-04-30T05:28:27.896366015Z [err]                        ^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T05:28:27.896367840Z [err]      high.append(f"volume/liq ok ({token.vol1h/token.liq:.1f}x)")
+2026-04-30T05:28:27.896370955Z [err]      ...<2 lines>...
+2026-04-30T05:28:27.896372888Z [err]                                    ~~~~~~~~~~~^~~~~~~~~~
+2026-04-30T05:28:27.896378423Z [err]      )
+2026-04-30T05:28:27.896379046Z [err]  ZeroDivisionError: float division by zero
+2026-04-30T05:28:27.896384372Z [err]      ^
+2026-04-30T05:28:27.896384518Z [inf]  
+2026-04-30T05:28:27.896389908Z [err]    File "/mise/installs/python/3.13.13/lib/python3.13/asyncio/tasks.py", line 507, in wait_for
+2026-04-30T05:28:27.896390164Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T05:28:27.896395190Z [err]      return await fut
+2026-04-30T05:28:27.896395325Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m05:28:27[0m
+2026-04-30T05:28:27.896401050Z [err]             ^^^^^^^^^
+2026-04-30T05:28:27.896401659Z [inf]  [2m💊 OpenGithub (OpenGithub) 
+2026-04-30T05:28:27.896406325Z [inf]  CuaDFXcxt7MV5awapFuQvfQwThA743Cs7e53b1cZpump
+2026-04-30T05:28:27.896408027Z [err]    File "/app/agent.py", line 94, in _fetch_and_decide
+2026-04-30T05:28:27.896411242Z [err]      decision = await self.decision.decide(token, source, raw)
+2026-04-30T05:28:27.896414022Z [err]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T05:28:27.896416802Z [err]    File "/app/decision_engine.py", line 63, in decide
+2026-04-30T05:28:27.896419593Z [err]      return self._rule_decide(token)
+2026-04-30T05:28:27.896425439Z [err]             ~~~~~~~~~~~~~~~~~^^^^^^^
+2026-04-30T05:28:27.897999320Z [inf]  
+2026-04-30T05:28:27.898005078Z [inf]  ┌ MC: 3...[0m
+2026-04-30T05:28:27.898008962Z [inf]  [2mFetching: CuaDFXcxt7MV5awapFuQvfQw...[0m
+2026-04-30T05:28:27.898012538Z [err]  2026-04-30 05:28:27,688 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T05:28:27.898015904Z [err]  2026-04-30 05:28:27,802 | INFO | GMGN proxy POST status: 200 | len=3590
+2026-04-30T05:28:27.898023932Z [err]  2026-04-30 05:28:27,802 | INFO | GMGN proxy POST OK: CuaDFXcxt7MV
+2026-04-30T05:28:28.183083675Z [err]  2026-04-30 05:28:28,170 | INFO | Sources CuaDFXcxt7MV: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T05:28:28.183088371Z [err]  2026-04-30 05:28:28,170 | INFO | GMGN keys for CuaDFXcxt7MV: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T05:28:28.183092215Z [err]  2026-04-30 05:28:28,171 | INFO | GMGN dev keys for CuaDFXcxt7MV: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T05:28:28.183095993Z [err]  2026-04-30 05:28:28,171 | INFO | GMGN pool keys for CuaDFXcxt7MV: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T05:28:28.183099145Z [err]  2026-04-30 05:28:28,171 | INFO | GMGN top10 (dev): 16.4% for CuaDFXcxt7MV (key=top_10_holder_rate)
+2026-04-30T05:28:28.183102488Z [err]  2026-04-30 05:28:28,171 | INFO | GMGN holders: 376 for CuaDFXcxt7MV (key=holder_count)
+2026-04-30T05:28:28.183114294Z [err]  2026-04-30 05:28:28,171 | INFO | RugCheck top10 skipped — GMGN already set: 16.4%
+2026-04-30T05:28:28.669995704Z [err]  2026-04-30 05:28:28,411 | INFO | Helius: 373 raw accounts for CuaDFXcxt7MV
+2026-04-30T05:28:28.670000986Z [err]  2026-04-30 05:28:28,493 | INFO | Final CuaDFXcxt7MV: MC=$24,494 | Holders=373 | Top10=16.4% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T05:28:28.670011607Z [err]  2026-04-30 05:28:28,493 | INFO | Filter skipped top10 override — GMGN already set: 16.4%
+2026-04-30T05:28:28.670016740Z [err]  2026-04-30 05:28:28,493 | WARNING | Sniper HEURISTIC CuaDFXcxt7MV: ~20 sniper
+2026-04-30T05:28:28.670021862Z [inf]  
+2026-04-30T05:28:28.670029738Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T05:28:28.670034489Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mOpenGithub ($OpenGithub)[0m
+2026-04-30T05:28:28.670039251Z [inf]    [2mCuaDFXcxt7MV5awapFuQvfQwThA743Cs7e53b1cZpump[0m
+2026-04-30T05:28:28.670043798Z [inf]  
+2026-04-30T05:28:28.670048165Z [inf]    [2mMARKET[0m
+2026-04-30T05:28:28.670052420Z [inf]    Price : $0.00002449  MC: $24,494  Liq: $11,938
+2026-04-30T05:28:28.670056714Z [inf]    Vol1h : $48,857  Chg1h: [91m-27.8%[0m  Age: 0.1h
+2026-04-30T05:28:28.670061383Z [inf]    Txn1h : 955B / 638S  DEX: pumpswap
+2026-04-30T05:28:28.670068175Z [inf]  
+2026-04-30T05:28:28.670073075Z [inf]    [2mON-CHAIN[0m
+2026-04-30T05:28:28.670078295Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T05:28:28.670083153Z [inf]    Top10 : 16.4% (GMGN)
+2026-04-30T05:28:28.670090452Z [inf]    Social: [93mNone[0m
+2026-04-30T05:28:28.670096559Z [inf]  
+2026-04-30T05:28:28.670101373Z [inf]    [2mRISKS[0m
+2026-04-30T05:28:28.670105633Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T05:28:28.670111048Z [inf]  
+2026-04-30T05:28:28.670544591Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T05:28:28.670550794Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T05:28:28.670555517Z [inf]    [92m✓[0m S2 MC & Liq: MC $24,494 | Liq $11,938 (48.7%)
+2026-04-30T05:28:28.670557666Z [inf]    [92m✓[0m Holders: 373
+2026-04-30T05:28:28.670560087Z [inf]    [92m✓[0m S3 Top10: 16.4% (GMGN)
+2026-04-30T05:28:28.670565517Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T05:28:28.670567093Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T05:28:28.670570804Z [inf]    [93mi[0m S5 Cluster: Score 45/100
+2026-04-30T05:28:28.670573034Z [inf]    [92m✓[0m Hldr Health: 98/100
+2026-04-30T05:28:28.670577123Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T05:28:28.670578765Z [inf]  
+2026-04-30T05:28:28.670582349Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T05:28:28.670584361Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T05:28:28.670586756Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T05:28:28.670592144Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T05:28:28.670592184Z [inf]    [93mi[0m Social: NONE
+2026-04-30T05:28:28.670597381Z [inf]  
+2026-04-30T05:28:28.670597524Z [inf]    [93mi[0m Momentum: 34/100
+2026-04-30T05:28:28.670602494Z [inf]    [92m✓[0m Smart Money: 37.6%
+2026-04-30T05:28:28.670606087Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T05:28:28.670606996Z [inf]    [93mi[0m Buy/Sell: 955B/638S (60%)
+2026-04-30T05:28:28.670610705Z [inf]    [93mi[0m Timing: 20/100
+2026-04-30T05:28:28.670614049Z [inf]    [93mi[0m Age: 4m
+2026-04-30T05:28:28.671662775Z [inf]    Entry  : $0.00002449
+2026-04-30T05:28:28.671669642Z [inf]    [92mTP1 +30%: $0.00003184 → jual 50% posisi[0m
+2026-04-30T05:28:28.671678065Z [inf]    [92mTP2 +50%: $0.00003673 → jual 40% posisi[0m
+2026-04-30T05:28:28.671682584Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T05:28:28.671688421Z [inf]    [91mSL  -20%: $0.00001959 → cut loss[0m
+2026-04-30T05:28:28.671693947Z [inf]    DCA #1  : $0.00001959 (-20%) jika on-chain valid
+2026-04-30T05:28:28.671699148Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T05:28:28.671704400Z [inf]  
+2026-04-30T05:28:28.671708797Z [inf]    [2m🔗 https://dexscreener.com/solana/CuaDFXcxt7MV5awapFuQvfQwThA743Cs7e53b1cZpump
+2026-04-30T05:28:28.671713996Z [inf]       https://rugcheck.xyz/tokens/CuaDFXcxt7MV5awapFuQvfQwThA743Cs7e53b1cZpump[0m
+2026-04-30T05:28:28.671718295Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T05:30:39.348081658Z [err]  2026-04-30 05:30:34,372 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T05:31:49.795471692Z [err]  2026-04-30 05:31:40,191 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:35:39.994879758Z [err]  2026-04-30 05:35:37,737 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T05:38:19.892978213Z [err]  2026-04-30 05:38:17,645 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T05:38:39.592260162Z [err]  2026-04-30 05:38:33,410 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:42:20.059871148Z [err]  2026-04-30 05:42:14,689 | INFO | Got difference for account updates
+2026-04-30T05:42:20.059874132Z [err]  2026-04-30 05:42:14,873 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T05:43:29.775697011Z [err]  2026-04-30 05:43:26,147 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:49:41.298236974Z [err]  2026-04-30 05:49:40,306 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T05:57:23.339642792Z [err]  2026-04-30 05:57:14,891 | INFO | Got difference for account updates
+2026-04-30T05:57:23.339645837Z [err]  2026-04-30 05:57:15,079 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T05:58:43.014406257Z [err]  2026-04-30 05:58:40,456 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:00:33.488836034Z [err]  2026-04-30 06:00:26,176 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T06:07:44.854967212Z [err]  2026-04-30 06:07:40,727 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:07:44.855023840Z [err]  2026-04-30 06:07:40,524 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T06:12:05.307789975Z [err]  2026-04-30 06:11:55,847 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:15:35.503351168Z [err]  2026-04-30 06:15:30,128 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T06:19:45.946294040Z [err]  2026-04-30 06:19:40,610 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T06:20:25.620817746Z [err]  2026-04-30 06:20:19,587 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:24:46.580391660Z [err]  2026-04-30 06:24:40,672 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T06:25:46.247013598Z [err]  2026-04-30 06:25:40,706 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:26:36.337744807Z [err]  2026-04-30 06:26:33,736 | INFO | Got difference for channel 3527087764 updates
+2026-04-30T06:26:40.698790659Z [err]  2026-04-30 06:26:40,694 | INFO | Got difference for channel 3527087764 updates
+2026-04-30T06:28:20.988653540Z [err]  2026-04-30 06:28:18,593 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Catecoin (CATE)  2vXcBr1sNDwQuD65kPAASUE26AANvYbZnrtNPQ3Ppump  ┌ MC: 30.1K - A
+2026-04-30T06:28:20.988657157Z [inf]  
+2026-04-30T06:28:20.988660525Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T06:28:20.988664044Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m06:28:18[0m
+2026-04-30T06:28:20.988667339Z [inf]  [2m💊 Catecoin (CATE) 
+2026-04-30T06:28:20.988670640Z [inf]  2vXcBr1sNDwQuD65kPAASUE26AANvYbZnrtNPQ3Ppump
+2026-04-30T06:28:20.988673740Z [inf]  
+2026-04-30T06:28:20.988678273Z [inf]  ┌ MC: 30.1K - A...[0m
+2026-04-30T06:28:20.988681042Z [inf]  [2mFetching: 2vXcBr1sNDwQuD65kPAASUE2...[0m
+2026-04-30T06:28:20.988683919Z [err]  2026-04-30 06:28:18,594 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T06:28:20.988687129Z [err]  2026-04-30 06:28:18,750 | INFO | GMGN proxy POST status: 200 | len=6241
+2026-04-30T06:28:20.988690002Z [err]  2026-04-30 06:28:18,751 | INFO | GMGN proxy POST OK: 2vXcBr1sNDwQ
+2026-04-30T06:28:20.988692783Z [err]  2026-04-30 06:28:19,104 | INFO | Sources 2vXcBr1sNDwQ: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T06:28:20.988697415Z [err]  2026-04-30 06:28:19,104 | INFO | GMGN keys for 2vXcBr1sNDwQ: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T06:28:20.989152514Z [err]  2026-04-30 06:28:19,104 | INFO | GMGN dev keys for 2vXcBr1sNDwQ: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T06:28:20.989157668Z [err]  2026-04-30 06:28:19,104 | INFO | GMGN pool keys for 2vXcBr1sNDwQ: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T06:28:20.989161871Z [err]  2026-04-30 06:28:19,104 | INFO | GMGN top10 (dev): 16.3% for 2vXcBr1sNDwQ (key=top_10_holder_rate)
+2026-04-30T06:28:20.989164820Z [err]  2026-04-30 06:28:19,104 | INFO | GMGN holders: 725 for 2vXcBr1sNDwQ (key=holder_count)
+2026-04-30T06:28:20.989168006Z [err]  2026-04-30 06:28:19,104 | INFO | RugCheck top10 skipped — GMGN already set: 16.3%
+2026-04-30T06:28:20.989171418Z [err]  2026-04-30 06:28:19,468 | INFO | Helius: 720 raw accounts for 2vXcBr1sNDwQ
+2026-04-30T06:28:20.989174940Z [err]  2026-04-30 06:28:19,574 | INFO | Final 2vXcBr1sNDwQ: MC=$71,340 | Holders=720 | Top10=16.3% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T06:28:20.989178553Z [err]  2026-04-30 06:28:19,574 | INFO | Filter skipped top10 override — GMGN already set: 16.3%
+2026-04-30T06:28:20.989181423Z [err]  2026-04-30 06:28:19,574 | WARNING | Sniper HEURISTIC 2vXcBr1sNDwQ: ~20 sniper
+2026-04-30T06:28:20.989184291Z [inf]  
+2026-04-30T06:28:20.989187215Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:28:20.990562024Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mCatecoin ($CATE)[0m
+2026-04-30T06:28:20.990566325Z [inf]    [2m2vXcBr1sNDwQuD65kPAASUE26AANvYbZnrtNPQ3Ppump[0m
+2026-04-30T06:28:20.990569415Z [inf]  
+2026-04-30T06:28:20.990572412Z [inf]    [2mMARKET[0m
+2026-04-30T06:28:20.990576411Z [inf]    Price : $0.00007133  MC: $71,340  Liq: $20,809
+2026-04-30T06:28:20.990579261Z [inf]    Vol1h : $234,418  Chg1h: [92m+110.0%[0m  Age: 0.2h
+2026-04-30T06:28:20.990581991Z [inf]    Txn1h : 2431B / 1785S  DEX: pumpswap
+2026-04-30T06:28:20.990584594Z [inf]  
+2026-04-30T06:28:20.990587212Z [inf]    [2mON-CHAIN[0m
+2026-04-30T06:28:20.990589903Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T06:28:20.990592665Z [inf]    Top10 : 16.3% (GMGN)
+2026-04-30T06:28:20.990595716Z [inf]    Social: [92mTW, Web[0m
+2026-04-30T06:28:20.990598515Z [inf]  
+2026-04-30T06:28:20.990601040Z [inf]    [2mRISKS[0m
+2026-04-30T06:28:20.990604566Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T06:28:20.990607334Z [inf]  
+2026-04-30T06:28:20.990610149Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T06:28:20.990613278Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T06:28:20.990616024Z [inf]    [92m✓[0m S2 MC & Liq: MC $71,340 | Liq $20,809 (29.2%)
+2026-04-30T06:28:20.990618895Z [inf]    [92m✓[0m S3 Top10: 16.3% (GMGN)
+2026-04-30T06:28:20.990621608Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T06:28:20.990624910Z [inf]    [92m✓[0m S5 Cluster: Score 30/100
+2026-04-30T06:28:20.990627808Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T06:28:20.990630364Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T06:28:20.990634238Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T06:28:20.990636746Z [inf]    [92m✓[0m Social: TW, Web
+2026-04-30T06:28:20.992174470Z [inf]    [2m🔗 https://dexscreener.com/solana/2vXcBr1sNDwQuD65kPAASUE26AANvYbZnrtNPQ3Ppump
+2026-04-30T06:28:20.992196280Z [inf]    [92m✓[0m Momentum: 84/100
+2026-04-30T06:28:20.992204280Z [inf]    [92m✓[0m Smart Money: 57.2%
+2026-04-30T06:28:20.992209744Z [inf]    [93mi[0m Buy/Sell: 2431B/1785S (58%)
+2026-04-30T06:28:20.992226697Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T06:28:20.992232274Z [inf]    [93mi[0m Age: 11m
+2026-04-30T06:28:20.992236892Z [inf]    [92m✓[0m Holders: 720
+2026-04-30T06:28:20.992242721Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T06:28:20.992247412Z [inf]    [92m✓[0m Hldr Health: 100/100
+2026-04-30T06:28:20.992252351Z [inf]  
+2026-04-30T06:28:20.992256922Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T06:28:20.992261185Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T06:28:20.992266224Z [inf]  
+2026-04-30T06:28:20.992270343Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T06:28:20.992274435Z [inf]    Entry  : $0.00007133
+2026-04-30T06:28:20.992278611Z [inf]    [92mTP1 +30%: $0.00009273 → jual 50% posisi[0m
+2026-04-30T06:28:20.992282615Z [inf]    [92mTP2 +50%: $0.00010700 → jual 40% posisi[0m
+2026-04-30T06:28:20.992285865Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T06:28:20.992289909Z [inf]    [91mSL  -20%: $0.00005706 → cut loss[0m
+2026-04-30T06:28:20.992293122Z [inf]    DCA #1  : $0.00005706 (-20%) jika on-chain valid
+2026-04-30T06:28:20.992296203Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T06:28:20.992301610Z [inf]  
+2026-04-30T06:28:20.993421126Z [inf]       https://rugcheck.xyz/tokens/2vXcBr1sNDwQuD65kPAASUE26AANvYbZnrtNPQ3Ppump[0m
+2026-04-30T06:28:20.993424883Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:32:01.338935215Z [err]  2026-04-30 06:31:52,134 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:38:02.574095192Z [err]  2026-04-30 06:37:57,896 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:41:42.889524636Z [err]  2026-04-30 06:41:40,843 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:42:22.614466019Z [err]  2026-04-30 06:42:15,518 | INFO | Got difference for account updates
+2026-04-30T06:43:12.684340691Z [err]  2026-04-30 06:43:02,692 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 mspaintify (MSPAINTIFY)  HDmojpFZvf1F421Gev2hh2p1ThaVbWsW5qh9C5Bipump  ┌ MC: 2
+2026-04-30T06:43:12.684346317Z [inf]  
+2026-04-30T06:43:12.684349183Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T06:43:12.684351821Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m06:43:02[0m
+2026-04-30T06:43:12.684354392Z [inf]  [2m💊 mspaintify (MSPAINTIFY) 
+2026-04-30T06:43:12.684357006Z [inf]  HDmojpFZvf1F421Gev2hh2p1ThaVbWsW5qh9C5Bipump
+2026-04-30T06:43:12.684360025Z [inf]  
+2026-04-30T06:43:12.684362514Z [inf]  ┌ MC: 2...[0m
+2026-04-30T06:43:12.684365680Z [inf]  [2mFetching: HDmojpFZvf1F421Gev2hh2p1...[0m
+2026-04-30T06:43:12.684368234Z [err]  2026-04-30 06:43:02,693 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T06:43:12.684371581Z [err]  2026-04-30 06:43:02,859 | INFO | GMGN proxy POST status: 200 | len=3654
+2026-04-30T06:43:12.684381310Z [err]  2026-04-30 06:43:02,859 | INFO | GMGN proxy POST OK: HDmojpFZvf1F
+2026-04-30T06:43:12.684384107Z [err]  2026-04-30 06:43:03,164 | INFO | Sources HDmojpFZvf1F: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T06:43:12.684386749Z [err]  2026-04-30 06:43:03,164 | INFO | GMGN keys for HDmojpFZvf1F: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T06:43:12.684389444Z [err]  2026-04-30 06:43:03,164 | INFO | GMGN dev keys for HDmojpFZvf1F: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T06:43:12.686210188Z [err]  2026-04-30 06:43:03,164 | INFO | GMGN pool keys for HDmojpFZvf1F: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T06:43:12.686213991Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:43:12.686216163Z [err]  2026-04-30 06:43:03,164 | INFO | GMGN top10 (dev): 21.8% for HDmojpFZvf1F (key=top_10_holder_rate)
+2026-04-30T06:43:12.686220897Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mmspaintify ($MSPAINTIFY)[0m
+2026-04-30T06:43:12.686223052Z [err]  2026-04-30 06:43:03,164 | INFO | GMGN holders: 396 for HDmojpFZvf1F (key=holder_count)
+2026-04-30T06:43:12.686228998Z [inf]    [2mHDmojpFZvf1F421Gev2hh2p1ThaVbWsW5qh9C5Bipump[0m
+2026-04-30T06:43:12.686229092Z [err]  2026-04-30 06:43:03,164 | INFO | RugCheck top10 skipped — GMGN already set: 21.8%
+2026-04-30T06:43:12.686234352Z [err]  2026-04-30 06:43:03,435 | INFO | Helius: 402 raw accounts for HDmojpFZvf1F
+2026-04-30T06:43:12.686234652Z [inf]  
+2026-04-30T06:43:12.686239224Z [err]  2026-04-30 06:43:03,531 | INFO | Final HDmojpFZvf1F: MC=$57,776 | Holders=402 | Top10=21.8% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T06:43:12.686239963Z [inf]    [2mMARKET[0m
+2026-04-30T06:43:12.686244836Z [err]  2026-04-30 06:43:03,531 | INFO | Filter skipped top10 override — GMGN already set: 21.8%
+2026-04-30T06:43:12.686246225Z [inf]    Price : $0.00005777  MC: $57,776  Liq: $18,508
+2026-04-30T06:43:12.686248764Z [err]  2026-04-30 06:43:03,531 | WARNING | Sniper HEURISTIC HDmojpFZvf1F: ~20 sniper
+2026-04-30T06:43:12.686253711Z [inf]  
+2026-04-30T06:43:12.688035408Z [inf]    Vol1h : $72,146  Chg1h: [92m+69.3%[0m  Age: 0.1h
+2026-04-30T06:43:12.688040434Z [inf]    Txn1h : 831B / 718S  DEX: pumpswap
+2026-04-30T06:43:12.688043543Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T06:43:12.688044090Z [inf]  
+2026-04-30T06:43:12.688048441Z [inf]    [2mON-CHAIN[0m
+2026-04-30T06:43:12.688051316Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T06:43:12.688055733Z [inf]    [92m✓[0m S5 Cluster: Score 30/100
+2026-04-30T06:43:12.688057437Z [inf]    Top10 : 21.8% (GMGN)
+2026-04-30T06:43:12.688062179Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T06:43:12.688062313Z [inf]    Social: [92mTW, Web[0m
+2026-04-30T06:43:12.688067990Z [inf]  
+2026-04-30T06:43:12.688068230Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T06:43:12.688072296Z [inf]    [2mRISKS[0m
+2026-04-30T06:43:12.688073980Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T06:43:12.688077001Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T06:43:12.688078870Z [inf]    [92m✓[0m Social: TW, Web
+2026-04-30T06:43:12.688082012Z [inf]  
+2026-04-30T06:43:12.688085006Z [inf]    [92m✓[0m Momentum: 88/100
+2026-04-30T06:43:12.688087325Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T06:43:12.688090393Z [inf]    [92m✓[0m Smart Money: 55.7%
+2026-04-30T06:43:12.688093334Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T06:43:12.688095298Z [inf]    [93mi[0m Buy/Sell: 831B/718S (54%)
+2026-04-30T06:43:12.688097970Z [inf]    [92m✓[0m S2 MC & Liq: MC $57,776 | Liq $18,508 (32.0%)
+2026-04-30T06:43:12.688100776Z [inf]    [92m✓[0m S3 Top10: 21.8% (GMGN)
+2026-04-30T06:43:12.689710851Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:43:12.689717074Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T06:43:12.689720553Z [inf]    [93mi[0m Age: 6m
+2026-04-30T06:43:12.689723375Z [inf]    [92m✓[0m Holders: 402
+2026-04-30T06:43:12.689726258Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T06:43:12.689729719Z [inf]    [92m✓[0m Hldr Health: 98/100
+2026-04-30T06:43:12.689733948Z [inf]  
+2026-04-30T06:43:12.689737741Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T06:43:12.689741533Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T06:43:12.689744938Z [inf]  
+2026-04-30T06:43:12.689748763Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T06:43:12.689752918Z [inf]    Entry  : $0.00005777
+2026-04-30T06:43:12.689756079Z [inf]    [92mTP1 +30%: $0.00007510 → jual 50% posisi[0m
+2026-04-30T06:43:12.689759756Z [inf]    [92mTP2 +50%: $0.00008665 → jual 40% posisi[0m
+2026-04-30T06:43:12.689762776Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T06:43:12.689766228Z [inf]    [91mSL  -20%: $0.00004622 → cut loss[0m
+2026-04-30T06:43:12.689769099Z [inf]    DCA #1  : $0.00004622 (-20%) jika on-chain valid
+2026-04-30T06:43:12.689772096Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T06:43:12.689774925Z [inf]  
+2026-04-30T06:43:12.689778138Z [inf]    [2m🔗 https://dexscreener.com/solana/HDmojpFZvf1F421Gev2hh2p1ThaVbWsW5qh9C5Bipump
+2026-04-30T06:43:12.689781438Z [inf]       https://rugcheck.xyz/tokens/HDmojpFZvf1F421Gev2hh2p1ThaVbWsW5qh9C5Bipump[0m
+2026-04-30T06:44:42.969639386Z [err]  2026-04-30 06:44:40,873 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T06:50:34.138731888Z [err]  2026-04-30 06:50:24,413 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:52:44.039873869Z [err]  2026-04-30 06:52:41,124 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T06:54:43.810699558Z [err]  2026-04-30 06:54:40,914 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:58:24.368210784Z [err]  2026-04-30 06:58:21,305 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Breastcoin (BREAST)  4ZdhpbJJNPBHNYVGfv41DRfTytjrb6Yg5P4y5iuRpump  ┌ MC: 29.7K
+2026-04-30T06:58:24.368216230Z [inf]  
+2026-04-30T06:58:24.368221399Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T06:58:24.368226124Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m06:58:21[0m
+2026-04-30T06:58:24.368230160Z [inf]  [2m💊 Breastcoin (BREAST) 
+2026-04-30T06:58:24.368234791Z [inf]  4ZdhpbJJNPBHNYVGfv41DRfTytjrb6Yg5P4y5iuRpump
+2026-04-30T06:58:24.368240464Z [inf]  
+2026-04-30T06:58:24.368245200Z [inf]  ┌ MC: 29.7K...[0m
+2026-04-30T06:58:24.368249969Z [inf]  [2mFetching: 4ZdhpbJJNPBHNYVGfv41DRfT...[0m
+2026-04-30T06:58:24.368256111Z [err]  2026-04-30 06:58:21,305 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T06:58:24.368260162Z [err]  2026-04-30 06:58:21,456 | INFO | GMGN proxy POST status: 200 | len=3645
+2026-04-30T06:58:24.368264553Z [err]  2026-04-30 06:58:21,457 | INFO | GMGN proxy POST OK: 4ZdhpbJJNPBH
+2026-04-30T06:58:24.368269004Z [err]  2026-04-30 06:58:21,806 | INFO | Sources 4ZdhpbJJNPBH: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T06:58:24.368273159Z [err]  2026-04-30 06:58:21,806 | INFO | GMGN keys for 4ZdhpbJJNPBH: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T06:58:24.368278142Z [err]  2026-04-30 06:58:21,806 | INFO | GMGN dev keys for 4ZdhpbJJNPBH: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T06:58:24.369031363Z [err]  2026-04-30 06:58:21,807 | INFO | GMGN pool keys for 4ZdhpbJJNPBH: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T06:58:24.369035367Z [err]  2026-04-30 06:58:21,807 | INFO | GMGN top10 (dev): 19.2% for 4ZdhpbJJNPBH (key=top_10_holder_rate)
+2026-04-30T06:58:24.369038865Z [err]  2026-04-30 06:58:21,807 | INFO | GMGN holders: 612 for 4ZdhpbJJNPBH (key=holder_count)
+2026-04-30T06:58:24.369042053Z [err]  2026-04-30 06:58:21,807 | INFO | RugCheck top10 skipped — GMGN already set: 19.2%
+2026-04-30T06:58:24.369046177Z [err]  2026-04-30 06:58:21,811 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T06:58:24.369048520Z [inf]    [2m4ZdhpbJJNPBHNYVGfv41DRfTytjrb6Yg5P4y5iuRpump[0m
+2026-04-30T06:58:24.369051604Z [err]  2026-04-30 06:58:22,109 | INFO | Helius: 608 raw accounts for 4ZdhpbJJNPBH
+2026-04-30T06:58:24.369054805Z [inf]  
+2026-04-30T06:58:24.369056526Z [err]  2026-04-30 06:58:22,193 | INFO | Final 4ZdhpbJJNPBH: MC=$63,804 | Holders=608 | Top10=19.2% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T06:58:24.369060456Z [err]  2026-04-30 06:58:22,194 | INFO | Filter skipped top10 override — GMGN already set: 19.2%
+2026-04-30T06:58:24.369064363Z [err]  2026-04-30 06:58:22,194 | WARNING | Sniper HEURISTIC 4ZdhpbJJNPBH: ~20 sniper
+2026-04-30T06:58:24.369068870Z [inf]  
+2026-04-30T06:58:24.369075581Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:58:24.369080153Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mBreastcoin ($BREAST)[0m
+2026-04-30T06:58:24.370682746Z [inf]    [2mMARKET[0m
+2026-04-30T06:58:24.370688143Z [inf]    Price : $0.00006380  MC: $63,804  Liq: $19,414
+2026-04-30T06:58:24.370690946Z [inf]    Vol1h : $58,209  Chg1h: [92m+87.4%[0m  Age: 0.1h
+2026-04-30T06:58:24.370693619Z [inf]    Txn1h : 915B / 633S  DEX: pumpswap
+2026-04-30T06:58:24.370696368Z [inf]  
+2026-04-30T06:58:24.370699028Z [inf]    [2mON-CHAIN[0m
+2026-04-30T06:58:24.370702728Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T06:58:24.370705472Z [inf]    Top10 : 19.2% (GMGN)
+2026-04-30T06:58:24.370709163Z [inf]    Social: [93mNone[0m
+2026-04-30T06:58:24.370711869Z [inf]  
+2026-04-30T06:58:24.370714401Z [inf]    [2mRISKS[0m
+2026-04-30T06:58:24.370716879Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T06:58:24.370719451Z [inf]  
+2026-04-30T06:58:24.370721980Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T06:58:24.370724733Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T06:58:24.370727349Z [inf]    [92m✓[0m S2 MC & Liq: MC $63,804 | Liq $19,414 (30.4%)
+2026-04-30T06:58:24.370729829Z [inf]    [92m✓[0m S3 Top10: 19.2% (GMGN)
+2026-04-30T06:58:24.370732368Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T06:58:24.370734806Z [inf]    [92m✓[0m S5 Cluster: Score 30/100
+2026-04-30T06:58:24.370737280Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T06:58:24.370739752Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T06:58:24.370742295Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T06:58:24.370746308Z [inf]    [93mi[0m Social: NONE
+2026-04-30T06:58:24.370748835Z [inf]    [92m✓[0m Momentum: 80/100
+2026-04-30T06:58:24.370751220Z [inf]    [92m✓[0m Smart Money: 65.4%
+2026-04-30T06:58:24.370753698Z [inf]    [93mi[0m Buy/Sell: 915B/633S (59%)
+2026-04-30T06:58:24.371648285Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T06:58:24.371657601Z [inf]    [93mi[0m Age: 8m
+2026-04-30T06:58:24.371663092Z [inf]    [92m✓[0m Holders: 608
+2026-04-30T06:58:24.371667883Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T06:58:24.371672974Z [inf]    [92m✓[0m Hldr Health: 100/100
+2026-04-30T06:58:24.371678243Z [inf]  
+2026-04-30T06:58:24.371683454Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T06:58:24.371688875Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T06:58:24.371693320Z [inf]  
+2026-04-30T06:58:24.371707433Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T06:58:24.371712199Z [inf]    Entry  : $0.00006380
+2026-04-30T06:58:24.371715484Z [inf]    [92mTP1 +30%: $0.00008294 → jual 50% posisi[0m
+2026-04-30T06:58:24.371720056Z [inf]    [92mTP2 +50%: $0.00009570 → jual 40% posisi[0m
+2026-04-30T06:58:24.371723854Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T06:58:24.371727559Z [inf]    [91mSL  -20%: $0.00005104 → cut loss[0m
+2026-04-30T06:58:24.371731442Z [inf]    DCA #1  : $0.00005104 (-20%) jika on-chain valid
+2026-04-30T06:58:24.371734733Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T06:58:24.371738320Z [inf]  
+2026-04-30T06:58:24.371741173Z [inf]    [2m🔗 https://dexscreener.com/solana/4ZdhpbJJNPBHNYVGfv41DRfTytjrb6Yg5P4y5iuRpump
+2026-04-30T06:58:24.371744377Z [inf]       https://rugcheck.xyz/tokens/4ZdhpbJJNPBHNYVGfv41DRfTytjrb6Yg5P4y5iuRpump[0m
+2026-04-30T06:58:24.371747212Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T06:59:44.104469303Z [err]  2026-04-30 06:59:41,071 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T07:00:04.100724200Z [err]  2026-04-30 07:00:03,788 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T07:03:14.290430303Z [err]  2026-04-30 07:03:09,081 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T07:04:44.024964188Z [err]  2026-04-30 07:04:41,013 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:12:25.693765232Z [err]  2026-04-30 07:12:16,037 | INFO | Got difference for account updates
+2026-04-30T07:12:45.408077551Z [err]  2026-04-30 07:12:41,081 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T07:13:15.406525884Z [err]  2026-04-30 07:13:14,808 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T07:13:15.406528850Z [err]  2026-04-30 07:13:14,808 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Balls Coin (BALLS)  LauQprDjyRQGFhwdXH2TLis9iUqXyx6grx18YnSpump  ┌ MC: 28.2K -
+2026-04-30T07:13:15.406532654Z [err]  2026-04-30 07:13:14,825 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:13:15.406536465Z [inf]  
+2026-04-30T07:13:15.406537867Z [err]  2026-04-30 07:13:14,934 | INFO | GMGN proxy POST status: 200 | len=3652
+2026-04-30T07:13:15.406541964Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T07:13:15.406543066Z [err]  2026-04-30 07:13:14,935 | INFO | GMGN proxy POST OK: LauQprDjyRQG
+2026-04-30T07:13:15.406547077Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m07:13:14[0m
+2026-04-30T07:13:15.406548504Z [err]  2026-04-30 07:13:15,307 | INFO | Sources LauQprDjyRQG: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T07:13:15.406551806Z [inf]  [2m💊 Balls Coin (BALLS) 
+2026-04-30T07:13:15.406553799Z [err]  2026-04-30 07:13:15,308 | INFO | GMGN keys for LauQprDjyRQG: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T07:13:15.406556166Z [inf]  LauQprDjyRQGFhwdXH2TLis9iUqXyx6grx18YnSpump
+2026-04-30T07:13:15.406559145Z [inf]  
+2026-04-30T07:13:15.406561778Z [inf]  ┌ MC: 28.2K -...[0m
+2026-04-30T07:13:15.406564471Z [inf]  [2mFetching: LauQprDjyRQGFhwdXH2TLis9...[0m
+2026-04-30T07:13:15.408413100Z [err]  2026-04-30 07:13:15,308 | INFO | GMGN dev keys for LauQprDjyRQG: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T07:13:15.408417700Z [err]  2026-04-30 07:13:15,308 | INFO | GMGN pool keys for LauQprDjyRQG: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T07:13:15.408420793Z [err]  2026-04-30 07:13:15,308 | INFO | GMGN top10 (dev): 21.5% for LauQprDjyRQG (key=top_10_holder_rate)
+2026-04-30T07:13:15.408423589Z [err]  2026-04-30 07:13:15,308 | INFO | GMGN holders: 359 for LauQprDjyRQG (key=holder_count)
+2026-04-30T07:13:15.408426344Z [err]  2026-04-30 07:13:15,308 | INFO | RugCheck top10 skipped — GMGN already set: 21.5%
+2026-04-30T07:13:15.591671085Z [err]  2026-04-30 07:13:15,562 | INFO | Helius: 363 raw accounts for LauQprDjyRQG
+2026-04-30T07:13:15.653054183Z [err]  2026-04-30 07:13:15,651 | INFO | Final LauQprDjyRQG: MC=$24,702 | Holders=363 | Top10=21.5% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T07:13:15.653059801Z [err]  2026-04-30 07:13:15,652 | INFO | Filter skipped top10 override — GMGN already set: 21.5%
+2026-04-30T07:13:15.653063623Z [err]  2026-04-30 07:13:15,652 | WARNING | Sniper HEURISTIC LauQprDjyRQG: ~20 sniper
+2026-04-30T07:13:15.655063853Z [inf]  
+2026-04-30T07:13:15.655068434Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T07:13:15.655069921Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T07:13:15.655074411Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mBalls Coin ($BALLS)[0m
+2026-04-30T07:13:15.655076147Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T07:13:15.655080302Z [inf]    [2mLauQprDjyRQGFhwdXH2TLis9iUqXyx6grx18YnSpump[0m
+2026-04-30T07:13:15.655082177Z [inf]    [92m✓[0m S2 MC & Liq: MC $24,702 | Liq $12,049 (48.8%)
+2026-04-30T07:13:15.655085119Z [inf]  
+2026-04-30T07:13:15.655087071Z [inf]    [92m✓[0m S3 Top10: 21.5% (GMGN)
+2026-04-30T07:13:15.655090107Z [inf]    [2mMARKET[0m
+2026-04-30T07:13:15.655093932Z [inf]    Price : $0.00002470  MC: $24,702  Liq: $12,049
+2026-04-30T07:13:15.655094655Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T07:13:15.655098406Z [inf]    Vol1h : $56,075  Chg1h: [91m-28.6%[0m  Age: 0.2h
+2026-04-30T07:13:15.655100180Z [inf]    [93mi[0m S5 Cluster: Score 45/100
+2026-04-30T07:13:15.655103553Z [inf]    Txn1h : 939B / 590S  DEX: pumpswap
+2026-04-30T07:13:15.655106287Z [inf]  
+2026-04-30T07:13:15.655108886Z [inf]    [2mON-CHAIN[0m
+2026-04-30T07:13:15.655111289Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T07:13:15.655113904Z [inf]    Top10 : 21.5% (GMGN)
+2026-04-30T07:13:15.655117457Z [inf]    Social: [92mTW, Web[0m
+2026-04-30T07:13:15.655120295Z [inf]  
+2026-04-30T07:13:15.655123005Z [inf]    [2mRISKS[0m
+2026-04-30T07:13:15.655125578Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T07:13:15.655128254Z [inf]  
+2026-04-30T07:13:15.656553706Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T07:13:15.656561298Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T07:13:15.656563889Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T07:13:15.656566320Z [inf]  
+2026-04-30T07:13:15.656569871Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T07:13:15.656572049Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T07:13:15.656575048Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T07:13:15.656577594Z [inf]    Entry  : $0.00002470
+2026-04-30T07:13:15.656579923Z [inf]    [92m✓[0m Social: TW, Web
+2026-04-30T07:13:15.656583160Z [inf]    [92mTP1 +30%: $0.00003211 → jual 50% posisi[0m
+2026-04-30T07:13:15.656586709Z [inf]    [93mi[0m Momentum: 40/100
+2026-04-30T07:13:15.656588053Z [inf]    [92mTP2 +50%: $0.00003705 → jual 40% posisi[0m
+2026-04-30T07:13:15.656593684Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T07:13:15.656598577Z [inf]    [91mSL  -20%: $0.00001976 → cut loss[0m
+2026-04-30T07:13:15.656599925Z [inf]    [92m✓[0m Smart Money: 48.7%
+2026-04-30T07:13:15.656603703Z [inf]    DCA #1  : $0.00001976 (-20%) jika on-chain valid
+2026-04-30T07:13:15.656606419Z [inf]    [93mi[0m Buy/Sell: 939B/590S (61%)
+2026-04-30T07:13:15.656611906Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T07:13:15.656612621Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T07:13:15.656617328Z [inf]    [93mi[0m Age: 9m
+2026-04-30T07:13:15.656621566Z [inf]    [92m✓[0m Holders: 363
+2026-04-30T07:13:15.656625277Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T07:13:15.656629073Z [inf]    [92m✓[0m Hldr Health: 88/100
+2026-04-30T07:13:15.656634163Z [inf]  
+2026-04-30T07:13:15.658078071Z [inf]  
+2026-04-30T07:13:15.658082034Z [inf]    [2m🔗 https://dexscreener.com/solana/LauQprDjyRQGFhwdXH2TLis9iUqXyx6grx18YnSpump
+2026-04-30T07:13:15.658086849Z [inf]       https://rugcheck.xyz/tokens/LauQprDjyRQGFhwdXH2TLis9iUqXyx6grx18YnSpump[0m
+2026-04-30T07:13:15.658090421Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T07:18:17.183049920Z [err]  2026-04-30 07:18:09,280 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T07:18:56.860366777Z [err]  2026-04-30 07:18:47,086 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:21:47.380144667Z [err]  2026-04-30 07:21:41,142 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:22:17.828495796Z [err]  2026-04-30 07:22:15,744 | INFO | Got difference for channel 3527087764 updates
+2026-04-30T07:22:37.072932547Z [err]  2026-04-30 07:22:37,025 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T07:25:48.035507965Z [err]  2026-04-30 07:25:41,296 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T07:26:37.755133528Z [err]  2026-04-30 07:26:34,669 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:27:17.898498364Z [err]  2026-04-30 07:27:16,318 | INFO | Got difference for account updates
+2026-04-30T07:28:17.414832756Z [err]  2026-04-30 07:28:14,511 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Ballscoin (Ballscoin)  6Z3vdSwVXxUtcyn7cEMKY4cj39R5p6jfeizEZKnNpump  ┌ MC: 29.
+2026-04-30T07:28:17.414837693Z [inf]  
+2026-04-30T07:28:17.414841315Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T07:28:17.414844300Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m07:28:14[0m
+2026-04-30T07:28:17.414847323Z [inf]  [2m💊 Ballscoin (Ballscoin) 
+2026-04-30T07:28:17.414850325Z [inf]  6Z3vdSwVXxUtcyn7cEMKY4cj39R5p6jfeizEZKnNpump
+2026-04-30T07:28:17.414856688Z [inf]  
+2026-04-30T07:28:17.414860161Z [inf]  ┌ MC: 29....[0m
+2026-04-30T07:28:17.414862973Z [inf]  [2mFetching: 6Z3vdSwVXxUtcyn7cEMKY4cj...[0m
+2026-04-30T07:28:17.414866016Z [err]  2026-04-30 07:28:14,511 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T07:28:17.414868854Z [err]  2026-04-30 07:28:14,656 | INFO | GMGN proxy POST status: 200 | len=3659
+2026-04-30T07:28:17.414871725Z [err]  2026-04-30 07:28:14,657 | INFO | GMGN proxy POST OK: 6Z3vdSwVXxUt
+2026-04-30T07:28:17.414874843Z [err]  2026-04-30 07:28:15,017 | INFO | Sources 6Z3vdSwVXxUt: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T07:28:17.414877730Z [err]  2026-04-30 07:28:15,017 | INFO | GMGN keys for 6Z3vdSwVXxUt: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T07:28:17.414880486Z [err]  2026-04-30 07:28:15,017 | INFO | GMGN dev keys for 6Z3vdSwVXxUt: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T07:28:17.416364574Z [err]  2026-04-30 07:28:15,017 | INFO | GMGN pool keys for 6Z3vdSwVXxUt: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T07:28:17.416366194Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T07:28:17.416373720Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mBallscoin ($Ballscoin)[0m
+2026-04-30T07:28:17.416374042Z [err]  2026-04-30 07:28:15,017 | INFO | GMGN top10 (dev): 20.8% for 6Z3vdSwVXxUt (key=top_10_holder_rate)
+2026-04-30T07:28:17.416379046Z [inf]    [2m6Z3vdSwVXxUtcyn7cEMKY4cj39R5p6jfeizEZKnNpump[0m
+2026-04-30T07:28:17.416382203Z [err]  2026-04-30 07:28:15,018 | INFO | GMGN holders: 403 for 6Z3vdSwVXxUt (key=holder_count)
+2026-04-30T07:28:17.416385666Z [inf]  
+2026-04-30T07:28:17.416389980Z [err]  2026-04-30 07:28:15,018 | INFO | RugCheck top10 skipped — GMGN already set: 20.8%
+2026-04-30T07:28:17.416391924Z [inf]    [2mMARKET[0m
+2026-04-30T07:28:17.416396389Z [err]  2026-04-30 07:28:15,244 | INFO | Helius: 405 raw accounts for 6Z3vdSwVXxUt
+2026-04-30T07:28:17.416397672Z [inf]    Price : $0.00002546  MC: $25,462  Liq: $12,231
+2026-04-30T07:28:17.416402318Z [err]  2026-04-30 07:28:15,347 | INFO | Final 6Z3vdSwVXxUt: MC=$25,462 | Holders=405 | Top10=20.8% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T07:28:17.416406008Z [err]  2026-04-30 07:28:15,347 | INFO | Filter skipped top10 override — GMGN already set: 20.8%
+2026-04-30T07:28:17.416409216Z [err]  2026-04-30 07:28:15,348 | WARNING | Sniper HEURISTIC 6Z3vdSwVXxUt: ~20 sniper
+2026-04-30T07:28:17.416413778Z [inf]  
+2026-04-30T07:28:17.418169469Z [inf]    Vol1h : $34,635  Chg1h: [91m-25.4%[0m  Age: 0.1h
+2026-04-30T07:28:17.418173669Z [inf]    Txn1h : 515B / 362S  DEX: pumpswap
+2026-04-30T07:28:17.418177026Z [inf]  
+2026-04-30T07:28:17.418180600Z [inf]    [2mON-CHAIN[0m
+2026-04-30T07:28:17.418185427Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T07:28:17.418189007Z [inf]    Top10 : 20.8% (GMGN)
+2026-04-30T07:28:17.418192131Z [inf]    Social: [92mTW[0m
+2026-04-30T07:28:17.418195324Z [inf]  
+2026-04-30T07:28:17.418198720Z [inf]    [2mRISKS[0m
+2026-04-30T07:28:17.418204300Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T07:28:17.418205605Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T07:28:17.418210662Z [inf]  
+2026-04-30T07:28:17.418211839Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T07:28:17.418217156Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T07:28:17.418217664Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T07:28:17.418223569Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T07:28:17.418224220Z [inf]    [92m✓[0m Social: TW
+2026-04-30T07:28:17.418229677Z [inf]    [92m✓[0m S2 MC & Liq: MC $25,462 | Liq $12,231 (48.0%)
+2026-04-30T07:28:17.418230585Z [inf]    [93mi[0m Momentum: 29/100
+2026-04-30T07:28:17.418235674Z [inf]    [92m✓[0m S3 Top10: 20.8% (GMGN)
+2026-04-30T07:28:17.418237247Z [inf]    [92m✓[0m Smart Money: 42.1%
+2026-04-30T07:28:17.418241369Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T07:28:17.418243039Z [inf]    [93mi[0m Buy/Sell: 515B/362S (59%)
+2026-04-30T07:28:17.418245765Z [inf]    [92m✓[0m S5 Cluster: Score 30/100
+2026-04-30T07:28:17.419756990Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T07:28:17.419768482Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T07:28:17.419771758Z [inf]    [93mi[0m Age: 6m
+2026-04-30T07:28:17.419775815Z [inf]    [92m✓[0m Holders: 405
+2026-04-30T07:28:17.419778935Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T07:28:17.419783607Z [inf]    [92m✓[0m Hldr Health: 98/100
+2026-04-30T07:28:17.419787332Z [inf]  
+2026-04-30T07:28:17.419792335Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T07:28:17.419796137Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T07:28:17.419800609Z [inf]  
+2026-04-30T07:28:17.419804057Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T07:28:17.419807292Z [inf]    Entry  : $0.00002546
+2026-04-30T07:28:17.419812684Z [inf]    [92mTP1 +30%: $0.00003310 → jual 50% posisi[0m
+2026-04-30T07:28:17.419817192Z [inf]    [92mTP2 +50%: $0.00003819 → jual 40% posisi[0m
+2026-04-30T07:28:17.419820797Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T07:28:17.419824156Z [inf]    [91mSL  -20%: $0.00002037 → cut loss[0m
+2026-04-30T07:28:17.419827600Z [inf]    DCA #1  : $0.00002037 (-20%) jika on-chain valid
+2026-04-30T07:28:17.419832122Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T07:28:17.419836243Z [inf]  
+2026-04-30T07:28:17.419840503Z [inf]    [2m🔗 https://dexscreener.com/solana/6Z3vdSwVXxUtcyn7cEMKY4cj39R5p6jfeizEZKnNpump
+2026-04-30T07:28:17.419844671Z [inf]       https://rugcheck.xyz/tokens/6Z3vdSwVXxUtcyn7cEMKY4cj39R5p6jfeizEZKnNpump[0m
+2026-04-30T07:29:47.686367058Z [err]  2026-04-30 07:29:41,297 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T07:32:27.764356399Z [err]  2026-04-30 07:32:25,182 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T07:33:37.491162999Z [err]  2026-04-30 07:33:36,779 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T07:33:37.567203899Z [err]  2026-04-30 07:33:37,563 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:37:48.732578365Z [err]  2026-04-30 07:37:41,233 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:42:49.685876649Z [err]  2026-04-30 07:42:41,470 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:43:09.388053450Z [err]  2026-04-30 07:43:01,771 | INFO | Sources EN63dgmTLqMp: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T07:43:09.388062418Z [err]  2026-04-30 07:43:01,771 | INFO | GMGN keys for EN63dgmTLqMp: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T07:43:09.388062533Z [err]  2026-04-30 07:43:01,191 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Dog Coin (Dog)  EN63dgmTLqMp9yCAaCqdVTnxUXRzEVYFN4xGcTo9pump  ┌ MC: 28.9K - Ag
+2026-04-30T07:43:09.388070883Z [inf]  
+2026-04-30T07:43:09.388075665Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T07:43:09.388079806Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m07:43:01[0m
+2026-04-30T07:43:09.388084233Z [inf]  [2m💊 Dog Coin (Dog) 
+2026-04-30T07:43:09.388088568Z [inf]  EN63dgmTLqMp9yCAaCqdVTnxUXRzEVYFN4xGcTo9pump
+2026-04-30T07:43:09.388092563Z [inf]  
+2026-04-30T07:43:09.388096051Z [inf]  ┌ MC: 28.9K - Ag...[0m
+2026-04-30T07:43:09.388099359Z [inf]  [2mFetching: EN63dgmTLqMp9yCAaCqdVTnx...[0m
+2026-04-30T07:43:09.388102766Z [err]  2026-04-30 07:43:01,192 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T07:43:09.388106857Z [err]  2026-04-30 07:43:01,362 | INFO | GMGN proxy POST status: 200 | len=3595
+2026-04-30T07:43:09.388109746Z [err]  2026-04-30 07:43:01,362 | INFO | GMGN proxy POST OK: EN63dgmTLqMp
+2026-04-30T07:43:09.389557136Z [err]  2026-04-30 07:43:01,771 | INFO | GMGN dev keys for EN63dgmTLqMp: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T07:43:09.389561390Z [err]  2026-04-30 07:43:01,771 | INFO | GMGN pool keys for EN63dgmTLqMp: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T07:43:09.389564756Z [err]  2026-04-30 07:43:01,771 | INFO | GMGN top10 (dev): 22.6% for EN63dgmTLqMp (key=top_10_holder_rate)
+2026-04-30T07:43:09.389567506Z [err]  2026-04-30 07:43:01,771 | INFO | GMGN holders: 168 for EN63dgmTLqMp (key=holder_count)
+2026-04-30T07:43:09.389570159Z [err]  2026-04-30 07:43:01,771 | INFO | RugCheck top10 skipped — GMGN already set: 22.6%
+2026-04-30T07:43:09.389572884Z [err]  2026-04-30 07:43:01,953 | INFO | Helius: 178 raw accounts for EN63dgmTLqMp
+2026-04-30T07:43:09.389575509Z [err]  2026-04-30 07:43:02,036 | INFO | Final EN63dgmTLqMp: MC=$16,959 | Holders=178 | Top10=22.6% (GMGN) | LP=100% | Risk=0.0/10
+2026-04-30T07:43:09.389579974Z [err]  2026-04-30 07:43:02,036 | INFO | Filter skipped top10 override — GMGN already set: 22.6%
+2026-04-30T07:43:09.389594066Z [err]  2026-04-30 07:43:02,037 | ERROR | process_signal error: float division by zero
+2026-04-30T07:43:09.389598237Z [err]  Traceback (most recent call last):
+2026-04-30T07:43:09.389602065Z [err]    File "/app/agent.py", line 112, in process_signal
+2026-04-30T07:43:09.391700264Z [err]      token, decision = await asyncio.wait_for(
+2026-04-30T07:43:09.391707574Z [err]                        ^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T07:43:09.391712555Z [err]      ...<2 lines>...
+2026-04-30T07:43:09.391716596Z [err]      )
+2026-04-30T07:43:09.391721589Z [err]      ^
+2026-04-30T07:43:09.391726573Z [err]    File "/mise/installs/python/3.13.13/lib/python3.13/asyncio/tasks.py", line 507, in wait_for
+2026-04-30T07:43:09.391730482Z [err]      return await fut
+2026-04-30T07:43:09.391734052Z [err]             ^^^^^^^^^
+2026-04-30T07:43:09.391738039Z [err]    File "/app/agent.py", line 94, in _fetch_and_decide
+2026-04-30T07:43:09.391741876Z [err]      decision = await self.decision.decide(token, source, raw)
+2026-04-30T07:43:09.391745232Z [err]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T07:43:09.391748408Z [err]    File "/app/decision_engine.py", line 63, in decide
+2026-04-30T07:43:09.391751460Z [err]      return self._rule_decide(token)
+2026-04-30T07:43:09.391754334Z [err]             ~~~~~~~~~~~~~~~~~^^^^^^^
+2026-04-30T07:43:09.391757389Z [err]    File "/app/decision_engine.py", line 185, in _rule_decide
+2026-04-30T07:43:09.391760647Z [err]      high.append(f"volume/liq ok ({token.vol1h/token.liq:.1f}x)")
+2026-04-30T07:43:09.391763926Z [err]                                    ~~~~~~~~~~~^~~~~~~~~~
+2026-04-30T07:43:09.391766886Z [err]  ZeroDivisionError: float division by zero
+2026-04-30T07:48:30.655080539Z [err]  2026-04-30 07:48:21,028 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:48:30.655085036Z [err]  2026-04-30 07:48:21,309 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T07:55:22.536058148Z [err]  2026-04-30 07:55:16,672 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T07:55:42.216301443Z [err]  2026-04-30 07:55:41,606 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T07:56:42.232711363Z [err]  2026-04-30 07:56:34,420 | INFO | Got difference for channel 3743596916 updates
+2026-04-30T07:59:43.217719857Z [err]  2026-04-30 07:59:41,820 | INFO | Got difference for channel 1522683244 updates
+2026-04-30T08:00:42.927748276Z [err]  2026-04-30 08:00:36,661 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:03:43.950777852Z [err]  2026-04-30 08:03:37,310 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:04:43.651263144Z [err]  2026-04-30 08:04:41,607 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:10:25.247876095Z [err]  2026-04-30 08:10:16,614 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:11:54.942862378Z [err]  2026-04-30 08:11:53,520 | INFO | Got difference for channel 2298132223 updates
+2026-04-30T08:12:24.978404533Z [err]  2026-04-30 08:12:17,128 | INFO | Got difference for account updates
+2026-04-30T08:13:04.632772651Z [err]  2026-04-30 08:13:02,854 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 GenZ Hero (PIDGE)  C5XbxhV2cqmfLqDymubWVgmVbgExo47bQphbzbnApump  ┌ MC: 29.6K -
+2026-04-30T08:13:04.632780957Z [inf]  
+2026-04-30T08:13:04.632785659Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T08:13:04.632790877Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m08:13:02[0m
+2026-04-30T08:13:04.632794545Z [inf]  [2m💊 GenZ Hero (PIDGE) 
+2026-04-30T08:13:04.632798849Z [inf]  C5XbxhV2cqmfLqDymubWVgmVbgExo47bQphbzbnApump
+2026-04-30T08:13:04.632802269Z [inf]  
+2026-04-30T08:13:04.632805941Z [inf]  ┌ MC: 29.6K -...[0m
+2026-04-30T08:13:04.632809649Z [inf]  [2mFetching: C5XbxhV2cqmfLqDymubWVgmV...[0m
+2026-04-30T08:13:04.632813404Z [err]  2026-04-30 08:13:02,855 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T08:13:04.632818174Z [err]  2026-04-30 08:13:03,049 | INFO | GMGN proxy POST status: 200 | len=3559
+2026-04-30T08:13:04.632822517Z [err]  2026-04-30 08:13:03,050 | INFO | GMGN proxy POST OK: C5XbxhV2cqmf
+2026-04-30T08:13:04.632826184Z [err]  2026-04-30 08:13:03,498 | INFO | Sources C5XbxhV2cqmf: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T08:13:04.632829684Z [err]  2026-04-30 08:13:03,498 | INFO | GMGN keys for C5XbxhV2cqmf: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T08:13:04.632833491Z [err]  2026-04-30 08:13:03,498 | INFO | GMGN dev keys for C5XbxhV2cqmf: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T08:13:04.634005382Z [err]  2026-04-30 08:13:03,498 | INFO | GMGN pool keys for C5XbxhV2cqmf: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T08:13:04.634009461Z [err]  2026-04-30 08:13:03,498 | INFO | GMGN top10 (dev): 25.7% for C5XbxhV2cqmf (key=top_10_holder_rate)
+2026-04-30T08:13:04.634013583Z [err]  2026-04-30 08:13:03,498 | INFO | GMGN holders: 201 for C5XbxhV2cqmf (key=holder_count)
+2026-04-30T08:13:04.634017461Z [err]  2026-04-30 08:13:03,498 | INFO | RugCheck top10 skipped — GMGN already set: 25.7%
+2026-04-30T08:13:04.634020574Z [err]  2026-04-30 08:13:03,732 | INFO | Helius: 204 raw accounts for C5XbxhV2cqmf
+2026-04-30T08:13:04.634024088Z [err]  2026-04-30 08:13:03,816 | INFO | Final C5XbxhV2cqmf: MC=$30,061 | Holders=204 | Top10=25.7% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T08:13:04.634027293Z [err]  2026-04-30 08:13:03,816 | INFO | Filter skipped top10 override — GMGN already set: 25.7%
+2026-04-30T08:13:04.634030377Z [err]  2026-04-30 08:13:03,817 | WARNING | Sniper HEURISTIC C5XbxhV2cqmf: ~20 sniper
+2026-04-30T08:13:04.634033925Z [inf]  
+2026-04-30T08:13:04.634037506Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:13:04.634040940Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mGenZ Hero ($PIDGE)[0m
+2026-04-30T08:13:04.634044513Z [inf]    [2mC5XbxhV2cqmfLqDymubWVgmVbgExo47bQphbzbnApump[0m
+2026-04-30T08:13:04.634048661Z [inf]  
+2026-04-30T08:13:04.634052013Z [inf]    [2mMARKET[0m
+2026-04-30T08:13:04.634055049Z [inf]    Price : $0.00003006  MC: $30,061  Liq: $13,270
+2026-04-30T08:13:04.635934631Z [inf]    [93mi[0m Buy/Sell: 80B/57S (58%)
+2026-04-30T08:13:04.635939812Z [inf]    [93mi[0m S5 Cluster: Score 45/100
+2026-04-30T08:13:04.635940376Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T08:13:04.635945221Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T08:13:04.635950913Z [inf]    Vol1h : $3,917  Chg1h: [91m-7.8%[0m  Age: 0.0h
+2026-04-30T08:13:04.635951183Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T08:13:04.635955645Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T08:13:04.635959300Z [inf]    Txn1h : 80B / 57S  DEX: pumpswap
+2026-04-30T08:13:04.635961107Z [inf]    [93mi[0m Social: NONE
+2026-04-30T08:13:04.635965753Z [inf]    [93mi[0m Momentum: 49/100
+2026-04-30T08:13:04.635966822Z [inf]  
+2026-04-30T08:13:04.635970207Z [inf]    [92m✓[0m Smart Money: 44.8%
+2026-04-30T08:13:04.635972134Z [inf]    [2mON-CHAIN[0m
+2026-04-30T08:13:04.635975773Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T08:13:04.635979542Z [inf]    Top10 : 25.7% (GMGN)
+2026-04-30T08:13:04.635982605Z [inf]    Social: [93mNone[0m
+2026-04-30T08:13:04.635985979Z [inf]  
+2026-04-30T08:13:04.635989241Z [inf]    [2mRISKS[0m
+2026-04-30T08:13:04.635992733Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T08:13:04.635996620Z [inf]  
+2026-04-30T08:13:04.636001293Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T08:13:04.636005028Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T08:13:04.636008071Z [inf]    [92m✓[0m S2 MC & Liq: MC $30,061 | Liq $13,270 (44.1%)
+2026-04-30T08:13:04.636011074Z [inf]    [92m✓[0m S3 Top10: 25.7% (GMGN)
+2026-04-30T08:13:04.636014108Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T08:13:04.637856041Z [inf]    [2m🔗 https://dexscreener.com/solana/C5XbxhV2cqmfLqDymubWVgmVbgExo47bQphbzbnApump
+2026-04-30T08:13:04.637861055Z [inf]    [93mi[0m Age: 1m
+2026-04-30T08:13:04.637862924Z [inf]       https://rugcheck.xyz/tokens/C5XbxhV2cqmfLqDymubWVgmVbgExo47bQphbzbnApump[0m
+2026-04-30T08:13:04.637868742Z [inf]    [92m✓[0m Holders: 204
+2026-04-30T08:13:04.637869056Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:13:04.637872802Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T08:13:04.637875754Z [inf]    [92m✓[0m Hldr Health: 88/100
+2026-04-30T08:13:04.637879023Z [inf]  
+2026-04-30T08:13:04.637882234Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T08:13:04.637885759Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T08:13:04.637888789Z [inf]  
+2026-04-30T08:13:04.637892205Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T08:13:04.637895543Z [inf]    Entry  : $0.00003006
+2026-04-30T08:13:04.637898466Z [inf]    [92mTP1 +30%: $0.00003908 → jual 50% posisi[0m
+2026-04-30T08:13:04.637901451Z [inf]    [92mTP2 +50%: $0.00004509 → jual 40% posisi[0m
+2026-04-30T08:13:04.637904292Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T08:13:04.637916173Z [inf]    [91mSL  -20%: $0.00002405 → cut loss[0m
+2026-04-30T08:13:04.637919855Z [inf]    DCA #1  : $0.00002405 (-20%) jika on-chain valid
+2026-04-30T08:13:04.637922624Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T08:13:04.637925314Z [inf]  
+2026-04-30T08:13:44.633044995Z [err]  2026-04-30 08:13:41,711 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:15:45.139544119Z [err]  2026-04-30 08:15:41,729 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:20:35.869626110Z [err]  2026-04-30 08:20:35,857 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T08:21:25.596484268Z [err]  2026-04-30 08:21:25,035 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:26:57.238377227Z [err]  2026-04-30 08:26:54,615 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:28:47.031401802Z [err]  2026-04-30 08:28:41,192 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 housecoin (HOUSE)  AJFPDZyzTUAK5bAGTx9oAVJZWYpgCos1KYwbqHaQpump  ┌ MC: 29.2K -
+2026-04-30T08:28:47.031407376Z [inf]  
+2026-04-30T08:28:47.031410788Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T08:28:47.031414005Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m08:28:41[0m
+2026-04-30T08:28:47.031417557Z [inf]  [2m💊 housecoin (HOUSE) 
+2026-04-30T08:28:47.031420882Z [inf]  AJFPDZyzTUAK5bAGTx9oAVJZWYpgCos1KYwbqHaQpump
+2026-04-30T08:28:47.031424252Z [inf]  
+2026-04-30T08:28:47.031427109Z [inf]  ┌ MC: 29.2K -...[0m
+2026-04-30T08:28:47.031429786Z [inf]  [2mFetching: AJFPDZyzTUAK5bAGTx9oAVJZ...[0m
+2026-04-30T08:28:47.031433545Z [err]  2026-04-30 08:28:41,193 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T08:28:47.031436933Z [err]  2026-04-30 08:28:41,368 | INFO | GMGN proxy POST status: 200 | len=3627
+2026-04-30T08:28:47.031442455Z [err]  2026-04-30 08:28:41,369 | INFO | GMGN proxy POST OK: AJFPDZyzTUAK
+2026-04-30T08:28:47.031446170Z [err]  2026-04-30 08:28:41,719 | INFO | Sources AJFPDZyzTUAK: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T08:28:47.031449961Z [err]  2026-04-30 08:28:41,719 | INFO | GMGN keys for AJFPDZyzTUAK: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T08:28:47.031452972Z [err]  2026-04-30 08:28:41,719 | INFO | GMGN dev keys for AJFPDZyzTUAK: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T08:28:47.032597393Z [err]  2026-04-30 08:28:41,719 | INFO | GMGN pool keys for AJFPDZyzTUAK: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T08:28:47.032601155Z [err]  2026-04-30 08:28:41,719 | INFO | GMGN top10 (dev): 24.3% for AJFPDZyzTUAK (key=top_10_holder_rate)
+2026-04-30T08:28:47.032604598Z [err]  2026-04-30 08:28:41,719 | INFO | GMGN holders: 200 for AJFPDZyzTUAK (key=holder_count)
+2026-04-30T08:28:47.032608021Z [err]  2026-04-30 08:28:41,719 | INFO | RugCheck top10 skipped — GMGN already set: 24.3%
+2026-04-30T08:28:47.032611717Z [err]  2026-04-30 08:28:41,902 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:28:47.032617234Z [err]  2026-04-30 08:28:41,981 | INFO | Helius: 201 raw accounts for AJFPDZyzTUAK
+2026-04-30T08:28:47.032620859Z [err]  2026-04-30 08:28:42,075 | INFO | Final AJFPDZyzTUAK: MC=$29,182 | Holders=201 | Top10=24.3% (GMGN) | LP=100% | Risk=7.0/10
+2026-04-30T08:28:47.032625076Z [err]  2026-04-30 08:28:42,075 | INFO | Filter skipped top10 override — GMGN already set: 24.3%
+2026-04-30T08:28:47.032629359Z [inf]  
+2026-04-30T08:28:47.032633333Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:28:47.032636840Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mhousecoin ($HOUSE)[0m
+2026-04-30T08:28:47.032640177Z [inf]    [2mAJFPDZyzTUAK5bAGTx9oAVJZWYpgCos1KYwbqHaQpump[0m
+2026-04-30T08:28:47.032643689Z [inf]  
+2026-04-30T08:28:47.032647056Z [inf]    [2mMARKET[0m
+2026-04-30T08:28:47.032650538Z [inf]    Price : $0.00002918  MC: $29,182  Liq: $0
+2026-04-30T08:28:47.034785470Z [inf]    [92m✓[0m Hldr Health: 88/100
+2026-04-30T08:28:47.034791352Z [inf]    [93mi[0m S2 Liq (Dead): Liq $0.00 — likely dead
+2026-04-30T08:28:47.034793907Z [inf]    [92m✓[0m Smart Money: 48.6%
+2026-04-30T08:28:47.034801003Z [inf]    [92m✓[0m S3 Top10: 24.3% (GMGN)
+2026-04-30T08:28:47.034801109Z [inf]    [92m✓[0m S5 Cluster: Score 15/100
+2026-04-30T08:28:47.034802971Z [inf]    [92m✓[0m Buy/Sell: 667B/347S (66%)
+2026-04-30T08:28:47.034810181Z [inf]    [93mi[0m S6 Dev Farm: MEDIUM
+2026-04-30T08:28:47.034810301Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T08:28:47.034810439Z [inf]    [91m✗[0m S4 Risk: 7.0/10
+2026-04-30T08:28:47.034810456Z [inf]    [92m✓[0m Holders: 201
+2026-04-30T08:28:47.034819269Z [inf]      [91m→ 7.0/10 > max 5.0[0m
+2026-04-30T08:28:47.034820727Z [inf]    [92m✓[0m Social: TW, Web
+2026-04-30T08:28:47.034821806Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T08:28:47.034825124Z [inf]    Vol1h : $47,018  Chg1h: [92m+941.0%[0m  Age: 0.9h
+2026-04-30T08:28:47.034827386Z [inf]    [92m✓[0m Momentum: 94/100
+2026-04-30T08:28:47.034829864Z [inf]    [92m✓[0m Age: 53m
+2026-04-30T08:28:47.034832278Z [inf]    Risk  : [91m7.0/10 [danger][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T08:28:47.034832721Z [inf]    Txn1h : 667B / 347S  DEX: pumpfun
+2026-04-30T08:28:47.034836950Z [inf]  
+2026-04-30T08:28:47.034840751Z [inf]    Top10 : 24.3% (GMGN)
+2026-04-30T08:28:47.034842470Z [inf]    [2mON-CHAIN[0m
+2026-04-30T08:28:47.034846169Z [inf]    Social: [92mTW, Web[0m
+2026-04-30T08:28:47.034850555Z [inf]  
+2026-04-30T08:28:47.034855758Z [inf]    [2mRISKS[0m
+2026-04-30T08:28:47.034859335Z [inf]    [93m⚠[0m Copycat token
+2026-04-30T08:28:47.034862558Z [inf]  
+2026-04-30T08:28:47.034867206Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T08:28:47.034870940Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T08:28:47.036395712Z [inf]    [91mSL  -20%: $0.00002334 → cut loss[0m
+2026-04-30T08:28:47.036400375Z [inf]    DCA #1  : $0.00002334 (-20%) jika on-chain valid
+2026-04-30T08:28:47.036405505Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T08:28:47.036405647Z [inf]  
+2026-04-30T08:28:47.036410374Z [inf]  
+2026-04-30T08:28:47.036412254Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T08:28:47.036416481Z [inf]    [2m🔗 https://dexscreener.com/solana/AJFPDZyzTUAK5bAGTx9oAVJZWYpgCos1KYwbqHaQpump
+2026-04-30T08:28:47.036418980Z [inf]    [2m1 red flag (S4 Risk) — observe dulu[0m
+2026-04-30T08:28:47.036421817Z [inf]       https://rugcheck.xyz/tokens/AJFPDZyzTUAK5bAGTx9oAVJZWYpgCos1KYwbqHaQpump[0m
+2026-04-30T08:28:47.036425430Z [inf]  
+2026-04-30T08:28:47.036427230Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:28:47.036429723Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T08:28:47.036432743Z [inf]    Entry  : $0.00002918
+2026-04-30T08:28:47.036435793Z [inf]    [92mTP1 +30%: $0.00003793 → jual 50% posisi[0m
+2026-04-30T08:28:47.036438557Z [inf]    [92mTP2 +50%: $0.00004377 → jual 40% posisi[0m
+2026-04-30T08:28:47.036442950Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T08:32:48.647951159Z [err]  2026-04-30 08:32:41,723 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:34:48.406155654Z [err]  2026-04-30 08:34:40,074 | INFO | Got difference for channel 2796945345 updates
+2026-04-30T08:34:48.406167023Z [err]  2026-04-30 08:34:44,377 | INFO | Got difference for channel 2796945345 updates
+2026-04-30T08:35:38.065593814Z [err]  2026-04-30 08:35:36,079 | INFO | Got difference for channel 2093384030 updates
+2026-04-30T08:35:38.065598078Z [err]  2026-04-30 08:35:36,786 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:38:48.980584464Z [err]  2026-04-30 08:38:41,749 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:40:48.708607223Z [err]  2026-04-30 08:40:41,749 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:42:18.444170239Z [err]  2026-04-30 08:42:17,958 | INFO | Got difference for account updates
+2026-04-30T08:42:18.444176775Z [err]  2026-04-30 08:42:18,198 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:43:48.729993712Z [err]  2026-04-30 08:43:41,473 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 KindnessCoin (KIND)  J3VCREwYbNokKqaH7TD3dx5UgKVvSYgEiRc7nuKzpump  ┌ MC: 33.9K
+2026-04-30T08:43:48.729997834Z [inf]  
+2026-04-30T08:43:48.730002459Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T08:43:48.730009139Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m08:43:41[0m
+2026-04-30T08:43:48.730015577Z [inf]  [2m💊 KindnessCoin (KIND) 
+2026-04-30T08:43:48.730018603Z [err]  2026-04-30 08:43:41,621 | INFO | GMGN proxy POST OK: J3VCREwYbNok
+2026-04-30T08:43:48.730023134Z [inf]  J3VCREwYbNokKqaH7TD3dx5UgKVvSYgEiRc7nuKzpump
+2026-04-30T08:43:48.730027452Z [err]  2026-04-30 08:43:41,801 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:43:48.730030058Z [inf]  
+2026-04-30T08:43:48.730035686Z [err]  2026-04-30 08:43:41,972 | INFO | Sources J3VCREwYbNok: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T08:43:48.730037578Z [inf]  ┌ MC: 33.9K...[0m
+2026-04-30T08:43:48.730042521Z [err]  2026-04-30 08:43:41,972 | INFO | GMGN keys for J3VCREwYbNok: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T08:43:48.730046116Z [inf]  [2mFetching: J3VCREwYbNokKqaH7TD3dx5U...[0m
+2026-04-30T08:43:48.730051369Z [err]  2026-04-30 08:43:41,474 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T08:43:48.730056538Z [err]  2026-04-30 08:43:41,620 | INFO | GMGN proxy POST status: 200 | len=3670
+2026-04-30T08:43:48.730706544Z [err]  2026-04-30 08:43:41,973 | INFO | GMGN dev keys for J3VCREwYbNok: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T08:43:48.730713496Z [err]  2026-04-30 08:43:41,973 | INFO | GMGN pool keys for J3VCREwYbNok: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T08:43:48.730718398Z [err]  2026-04-30 08:43:41,973 | INFO | GMGN top10 (dev): 20.0% for J3VCREwYbNok (key=top_10_holder_rate)
+2026-04-30T08:43:48.730722646Z [err]  2026-04-30 08:43:41,973 | INFO | GMGN holders: 526 for J3VCREwYbNok (key=holder_count)
+2026-04-30T08:43:48.730725993Z [err]  2026-04-30 08:43:41,973 | INFO | RugCheck top10 skipped — GMGN already set: 20.0%
+2026-04-30T08:43:48.730729447Z [err]  2026-04-30 08:43:42,274 | INFO | Helius: 547 raw accounts for J3VCREwYbNok
+2026-04-30T08:43:48.730733031Z [err]  2026-04-30 08:43:42,359 | INFO | Final J3VCREwYbNok: MC=$63,750 | Holders=547 | Top10=20.0% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T08:43:48.730736443Z [err]  2026-04-30 08:43:42,360 | INFO | Filter skipped top10 override — GMGN already set: 20.0%
+2026-04-30T08:43:48.730740258Z [err]  2026-04-30 08:43:42,360 | WARNING | Sniper HEURISTIC J3VCREwYbNok: ~20 sniper
+2026-04-30T08:43:48.730743788Z [inf]  
+2026-04-30T08:43:48.730747227Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:43:48.731761400Z [inf]    ⚠️ [1m[93mWATCH[0m  [1mKindnessCoin ($KIND)[0m
+2026-04-30T08:43:48.731766495Z [inf]    [2mJ3VCREwYbNokKqaH7TD3dx5UgKVvSYgEiRc7nuKzpump[0m
+2026-04-30T08:43:48.731770317Z [inf]  
+2026-04-30T08:43:48.731773745Z [inf]    [2mMARKET[0m
+2026-04-30T08:43:48.731776949Z [inf]    Price : $0.00006374  MC: $63,750  Liq: $19,499
+2026-04-30T08:43:48.731781720Z [inf]    Vol1h : $108,998  Chg1h: [92m+83.7%[0m  Age: 0.1h
+2026-04-30T08:43:48.731788752Z [inf]    Txn1h : 1441B / 1102S  DEX: pumpswap
+2026-04-30T08:43:48.731790954Z [inf]  
+2026-04-30T08:43:48.731796861Z [inf]  
+2026-04-30T08:43:48.731797881Z [inf]    [2mFILTER (1 flag)[0m
+2026-04-30T08:43:48.731803467Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T08:43:48.731804092Z [inf]    [2mON-CHAIN[0m
+2026-04-30T08:43:48.731809181Z [inf]    [92m✓[0m S2 MC & Liq: MC $63,750 | Liq $19,499 (30.6%)
+2026-04-30T08:43:48.731809781Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T08:43:48.731814096Z [inf]    [92m✓[0m S3 Top10: 20.0% (GMGN)
+2026-04-30T08:43:48.731817868Z [inf]    Top10 : 20.0% (GMGN)
+2026-04-30T08:43:48.731818347Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T08:43:48.731824602Z [inf]    Social: [92mTW[0m
+2026-04-30T08:43:48.731825141Z [inf]    [92m✓[0m S5 Cluster: Score 30/100
+2026-04-30T08:43:48.731830154Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T08:43:48.731832534Z [inf]  
+2026-04-30T08:43:48.731836820Z [inf]    [91m✗[0m S7 Sniper: 20
+2026-04-30T08:43:48.731839208Z [inf]    [2mRISKS[0m
+2026-04-30T08:43:48.731841522Z [inf]      [91m→ 20 sniper wallets — potensi dump [GMGN][0m
+2026-04-30T08:43:48.731845170Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T08:43:48.733292008Z [inf]    [92m✓[0m Social: TW
+2026-04-30T08:43:48.733297426Z [inf]    [92m✓[0m Momentum: 92/100
+2026-04-30T08:43:48.733302266Z [inf]    [92m✓[0m Smart Money: 38.6%
+2026-04-30T08:43:48.733307033Z [inf]    [93mi[0m Buy/Sell: 1441B/1102S (57%)
+2026-04-30T08:43:48.733311842Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T08:43:48.733318125Z [inf]    [93mi[0m Age: 6m
+2026-04-30T08:43:48.733320413Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T08:43:48.733325394Z [inf]    [92m✓[0m Holders: 547
+2026-04-30T08:43:48.733331933Z [inf]    Entry  : $0.00006374
+2026-04-30T08:43:48.733334776Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T08:43:48.733340123Z [inf]    [92mTP1 +30%: $0.00008286 → jual 50% posisi[0m
+2026-04-30T08:43:48.733342003Z [inf]    [92m✓[0m Hldr Health: 100/100
+2026-04-30T08:43:48.733345868Z [inf]    [92mTP2 +50%: $0.00009561 → jual 40% posisi[0m
+2026-04-30T08:43:48.733348360Z [inf]  
+2026-04-30T08:43:48.733352958Z [inf]    [2m[Rule][0m [93m[1mWATCH[0m [LOW] conf:60%
+2026-04-30T08:43:48.733357019Z [inf]    [2m1 red flag (S7 Sniper) — observe dulu[0m
+2026-04-30T08:43:48.733360669Z [inf]  
+2026-04-30T08:43:48.733367557Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T08:43:48.733372469Z [inf]    [91mSL  -20%: $0.00005099 → cut loss[0m
+2026-04-30T08:43:48.733376649Z [inf]    DCA #1  : $0.00005099 (-20%) jika on-chain valid
+2026-04-30T08:43:48.733380781Z [inf]    Sizing  : [2mJika masuk: max 8% portfolio, TP1 = exit semua[0m
+2026-04-30T08:43:48.733384964Z [inf]  
+2026-04-30T08:43:48.733389148Z [inf]    [2m🔗 https://dexscreener.com/solana/J3VCREwYbNokKqaH7TD3dx5UgKVvSYgEiRc7nuKzpump
+2026-04-30T08:43:48.734314598Z [inf]       https://rugcheck.xyz/tokens/J3VCREwYbNokKqaH7TD3dx5UgKVvSYgEiRc7nuKzpump[0m
+2026-04-30T08:43:48.734318954Z [inf]  [93m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:49:49.890055813Z [err]  2026-04-30 08:49:41,896 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:51:29.620303695Z [err]  2026-04-30 08:51:25,118 | INFO | Got difference for channel 2135710857 updates
+2026-04-30T08:54:50.871525426Z [err]  2026-04-30 08:54:41,964 | INFO | Got difference for channel 2397610468 updates
+2026-04-30T08:58:11.322702808Z [err]  2026-04-30 08:58:03,256 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 Wings of Hope (HOPE)  CAcBNFckqbPTX6RYeRF9MbtPU5JmeCqjbVnpSPXopump  ┌ MC: 30.1
+2026-04-30T08:58:11.322717772Z [err]  2026-04-30 08:58:03,256 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T08:58:11.322724913Z [err]  2026-04-30 08:58:03,440 | INFO | GMGN proxy POST status: 200 | len=3677
+2026-04-30T08:58:11.322733769Z [err]  2026-04-30 08:58:03,441 | INFO | GMGN proxy POST OK: 4QiaMXqE9iU3
+2026-04-30T08:58:11.322739637Z [err]  2026-04-30 08:58:03,771 | INFO | Sources 4QiaMXqE9iU3: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T08:58:11.322745853Z [err]  2026-04-30 08:58:03,771 | INFO | GMGN keys for 4QiaMXqE9iU3: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T08:58:11.322779241Z [err]  2026-04-30 08:58:03,255 | INFO | Signal dari Pumpfun Volume Alert 🔥🔥🔥: 1 CA | entry_kw=True | preview: 💊 The Trenchers (TRENCHERS)  4QiaMXqE9iU3PtJzsKiJyM5eyL7gwf86NTYMxowJpump  ┌ MC:
+2026-04-30T08:58:11.322783919Z [inf]  
+2026-04-30T08:58:11.322791872Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T08:58:11.322796246Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m08:58:03[0m
+2026-04-30T08:58:11.322802279Z [inf]  [2m💊 The Trenchers (TRENCHERS) 
+2026-04-30T08:58:11.322807052Z [inf]  4QiaMXqE9iU3PtJzsKiJyM5eyL7gwf86NTYMxowJpump
+2026-04-30T08:58:11.322812669Z [inf]  
+2026-04-30T08:58:11.322816752Z [inf]  ┌ MC:...[0m
+2026-04-30T08:58:11.322821506Z [inf]  [2mFetching: 4QiaMXqE9iU3PtJzsKiJyM5e...[0m
+2026-04-30T08:58:11.323111819Z [err]  2026-04-30 08:58:03,771 | INFO | GMGN dev keys for 4QiaMXqE9iU3: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T08:58:11.323119825Z [err]  2026-04-30 08:58:03,771 | INFO | GMGN pool keys for 4QiaMXqE9iU3: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T08:58:11.323124554Z [err]  2026-04-30 08:58:03,771 | INFO | GMGN top10 (dev): 23.1% for 4QiaMXqE9iU3 (key=top_10_holder_rate)
+2026-04-30T08:58:11.323130965Z [err]  2026-04-30 08:58:03,771 | INFO | GMGN holders: 218 for 4QiaMXqE9iU3 (key=holder_count)
+2026-04-30T08:58:11.323137033Z [err]  2026-04-30 08:58:03,771 | INFO | RugCheck top10 skipped — GMGN already set: 23.1%
+2026-04-30T08:58:11.323144457Z [err]  2026-04-30 08:58:04,016 | INFO | Helius: 222 raw accounts for 4QiaMXqE9iU3
+2026-04-30T08:58:11.323151496Z [err]  2026-04-30 08:58:04,111 | INFO | Final 4QiaMXqE9iU3: MC=$23,687 | Holders=222 | Top10=23.1% (GMGN) | LP=100% | Risk=3.0/10
+2026-04-30T08:58:11.323158611Z [err]  2026-04-30 08:58:04,112 | INFO | Filter skipped top10 override — GMGN already set: 23.1%
+2026-04-30T08:58:11.323165009Z [inf]  
+2026-04-30T08:58:11.323172217Z [inf]  [92m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:58:11.324419491Z [inf]  
+2026-04-30T08:58:11.324420807Z [inf]    ✅ [1m[92mMASUK[0m  [1mThe Trenchers ($TRENCHERS)[0m
+2026-04-30T08:58:11.324424102Z [inf]    [93mi[0m Momentum: 30/100
+2026-04-30T08:58:11.324430061Z [inf]    [2mRISKS[0m
+2026-04-30T08:58:11.324434785Z [inf]    [2m4QiaMXqE9iU3PtJzsKiJyM5eyL7gwf86NTYMxowJpump[0m
+2026-04-30T08:58:11.324435269Z [inf]    [92m✓[0m Smart Money: 55.2%
+2026-04-30T08:58:11.324436788Z [inf]    [93m⚠[0m Low amount of LP Providers
+2026-04-30T08:58:11.324443044Z [inf]  
+2026-04-30T08:58:11.324445319Z [inf]  
+2026-04-30T08:58:11.324450204Z [inf]    [2mFILTER (0 flags)[0m
+2026-04-30T08:58:11.324452413Z [inf]    [2mMARKET[0m
+2026-04-30T08:58:11.324458873Z [inf]    [92m✓[0m S1 Authority: Revoked | LP 100% (GMGN) burned
+2026-04-30T08:58:11.324458963Z [inf]    Price : $0.00002368  MC: $23,687  Liq: $11,770
+2026-04-30T08:58:11.324467798Z [inf]    [92m✓[0m S2 MC & Liq: MC $23,687 | Liq $11,770 (49.7%)
+2026-04-30T08:58:11.324467905Z [inf]    Vol1h : $2,870  Chg1h: [91m-30.7%[0m  Age: 0.0h
+2026-04-30T08:58:11.324475027Z [inf]    Txn1h : 37B / 13S  DEX: pumpswap
+2026-04-30T08:58:11.324478078Z [inf]    [92m✓[0m S3 Top10: 23.1% (GMGN)
+2026-04-30T08:58:11.324486217Z [inf]  
+2026-04-30T08:58:11.324487693Z [inf]    [92m✓[0m S4 Risk & LP: 3.0/10 [warn] | LP 100% (GMGN)
+2026-04-30T08:58:11.324492377Z [inf]    [2mON-CHAIN[0m
+2026-04-30T08:58:11.324499126Z [inf]    Risk  : [92m3.0/10 [warn][0m  LP: [92m100%[0m  Mint: [92mRevoked[0m
+2026-04-30T08:58:11.324502130Z [inf]    [93mi[0m S5 Cluster: Score 45/100
+2026-04-30T08:58:11.324506630Z [inf]    Top10 : 23.1% (GMGN)
+2026-04-30T08:58:11.324509823Z [inf]    [92m✓[0m S6 Dev Farm: LOW
+2026-04-30T08:58:11.324513053Z [inf]    Social: [92mTW[0m
+2026-04-30T08:58:11.324516094Z [inf]    [92m✓[0m Social: TW
+2026-04-30T08:58:11.325358707Z [inf]    [92m✓[0m Buy/Sell: 37B/13S (74%)
+2026-04-30T08:58:11.325365541Z [inf]    [93mi[0m Timing: 55/100
+2026-04-30T08:58:11.325371039Z [inf]    [93mi[0m Age: 1m
+2026-04-30T08:58:11.325376938Z [inf]    [92m✓[0m Holders: 222
+2026-04-30T08:58:11.325383001Z [inf]    [92m✓[0m Fee Health: OK
+2026-04-30T08:58:11.325387559Z [inf]    [92m✓[0m Hldr Health: 88/100
+2026-04-30T08:58:11.325392361Z [inf]  
+2026-04-30T08:58:11.325397581Z [inf]    [2m[Rule][0m [92m[1mENTER[0m [HIGH] conf:88%
+2026-04-30T08:58:11.325402305Z [inf]    [2m[HIGH] very fresh (<1h), buying pressure 74%, distribusi bagus (23%), LP fully burned, risk 3.0/10[0m
+2026-04-30T08:58:11.325406869Z [inf]  
+2026-04-30T08:58:11.325411773Z [inf]    [96mTRADING PLAN (eksekusi MANUAL)[0m
+2026-04-30T08:58:11.325416052Z [inf]    Entry  : $0.00002368
+2026-04-30T08:58:11.325419536Z [inf]    [92mTP1 +30%: $0.00003078 → jual 50% posisi[0m
+2026-04-30T08:58:11.325423113Z [inf]    [92mTP2 +50%: $0.00003552 → jual 40% posisi[0m
+2026-04-30T08:58:11.325426519Z [inf]    [93mMoonbag : sisa 10%[0m
+2026-04-30T08:58:11.325430234Z [inf]    [91mSL  -20%: $0.00001894 → cut loss[0m
+2026-04-30T08:58:11.325434272Z [inf]    DCA #1  : $0.00001894 (-20%) jika on-chain valid
+2026-04-30T08:58:11.325438686Z [inf]    Sizing  : [2m25% portfolio (~0.250 SOL) — sesuaikan conviction kamu[0m
+2026-04-30T08:58:11.325442791Z [inf]  
+2026-04-30T08:58:11.325446997Z [inf]    [2m🔗 https://dexscreener.com/solana/4QiaMXqE9iU3PtJzsKiJyM5eyL7gwf86NTYMxowJpump
+2026-04-30T08:58:11.325451240Z [inf]       https://rugcheck.xyz/tokens/4QiaMXqE9iU3PtJzsKiJyM5eyL7gwf86NTYMxowJpump[0m
+2026-04-30T08:58:11.326384067Z [inf]  [92m══════════════════════════════════════════════════════════════════[0m
+2026-04-30T08:58:11.326388430Z [err]  2026-04-30 08:58:06,542 | INFO | GMGN dev keys for CAcBNFckqbPT: ['address', 'creator_address', 'creator_token_balance', 'creator_token_status', 'twitter_name_change_history', 'top_10_holder_rate', 'dexscr_ad', 'dexscr_update_link', 'cto_flag', 'dexscr_boost_fee', 'dexscr_trending_bar', 'dexscr_ad_ts', 'dexscr_update_link_ts', 'dexscr_boost_ts', 'dexscr_trending_bar_ts', 'twitter_del_post_token_count', 'twitter_create_token_count', 'fund_from', 'fund_from_ts', 'creator_open_count']
+2026-04-30T08:58:11.326392755Z [err]  2026-04-30 08:58:04,535 | ERROR | Send error 400: Bad Request: can't parse entities: Unsupported start tag "1h)," at byte offset 518
+2026-04-30T08:58:11.326394701Z [inf]  
+2026-04-30T08:58:11.326399967Z [inf]  
+2026-04-30T08:58:11.326401612Z [inf]  ┌ MC: 30.1...[0m
+2026-04-30T08:58:11.326408196Z [inf]  [2mFetching: CAcBNFckqbPTX6RYeRF9MbtP...[0m
+2026-04-30T08:58:11.326408660Z [inf]  [96m────────────────────────────────────────────────────────────[0m
+2026-04-30T08:58:11.326415783Z [err]  2026-04-30 08:58:06,037 | INFO | GMGN proxy POST: https://tight-frost-220a.thevirtualbot123.workers.dev?path=/api/v1/mutil_window_token_info
+2026-04-30T08:58:11.326415945Z [err]  2026-04-30 08:58:06,147 | INFO | GMGN proxy POST OK: CAcBNFckqbPT
+2026-04-30T08:58:11.326419267Z [inf]  [96m[TG:Pumpfun Volume Alert 🔥][0m [2m08:58:06[0m
+2026-04-30T08:58:11.326421622Z [err]  2026-04-30 08:58:06,146 | INFO | GMGN proxy POST status: 200 | len=3603
+2026-04-30T08:58:11.326427495Z [err]  2026-04-30 08:58:06,541 | INFO | Sources CAcBNFckqbPT: DEX=OK | GMGN=OK | RC=OK
+2026-04-30T08:58:11.326427569Z [inf]  [2m💊 Wings of Hope (HOPE) 
+2026-04-30T08:58:11.326435969Z [inf]  CAcBNFckqbPTX6RYeRF9MbtPU5JmeCqjbVnpSPXopump
+2026-04-30T08:58:11.326439200Z [err]  2026-04-30 08:58:06,541 | INFO | GMGN keys for CAcBNFckqbPT: ['address', 'symbol', 'name', 'decimals', 'logo', 'banner', 'biggest_pool_address', 'open_timestamp', 'migrated_timestamp', 'holder_count', 'circulating_supply', 'total_supply', 'max_supply', 'liquidity', 'creation_timestamp', 'pool', 'tpool', 'dev', 'price', 'standard', 'priority_fee', 'tip_fee', 'trade_fee', 'total_fee', 'og', 'image_dup_count', 'creation_tool', 'trans_symbol', 'trans_name', 'trans_symbol_zhcn']
+2026-04-30T08:58:11.327302261Z [err]  2026-04-30 08:58:06,542 | INFO | GMGN pool keys for CAcBNFckqbPT: ['address', 'pool_address', 'quote_address', 'quote_symbol', 'liquidity', 'base_reserve', 'quote_reserve', 'initial_liquidity', 'initial_base_reserve', 'initial_quote_reserve', 'creation_timestamp', 'base_reserve_value', 'quote_reserve_value', 'quote_vault_address', 'base_vault_address', 'creator', 'exchange', 'token0_address', 'token1_address', 'base_address']
+2026-04-30T08:58:11.327314504Z [err]  2026-04-30 08:58:06,542 | INFO | GMGN top10 (dev): 24.0% for CAcBNFckqbPT (key=top_10_holder_rate)
+2026-04-30T08:58:11.327322204Z [err]  2026-04-30 08:58:06,542 | INFO | GMGN holders: 151 for CAcBNFckqbPT (key=holder_count)
+2026-04-30T08:58:11.327327536Z [err]  2026-04-30 08:58:06,542 | INFO | RugCheck top10 skipped — GMGN already set: 24.0%
+2026-04-30T08:58:11.327332490Z [err]  2026-04-30 08:58:06,705 | INFO | Helius: 152 raw accounts for CAcBNFckqbPT
+2026-04-30T08:58:11.327339426Z [err]  2026-04-30 08:58:06,800 | INFO | Final CAcBNFckqbPT: MC=$13,368 | Holders=152 | Top10=24.0% (GMGN) | LP=100% | Risk=0.0/10
+2026-04-30T08:58:11.327343928Z [err]  2026-04-30 08:58:06,801 | INFO | Filter skipped top10 override — GMGN already set: 24.0%
+2026-04-30T08:58:11.327348736Z [err]  2026-04-30 08:58:06,801 | ERROR | process_signal error: float division by zero
+2026-04-30T08:58:11.327355701Z [err]  Traceback (most recent call last):
+2026-04-30T08:58:11.327362022Z [err]    File "/app/agent.py", line 112, in process_signal
+2026-04-30T08:58:11.327366888Z [err]      token, decision = await asyncio.wait_for(
+2026-04-30T08:58:11.327372580Z [err]                        ^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T08:58:11.327376943Z [err]      ...<2 lines>...
+2026-04-30T08:58:11.327381399Z [err]      )
+2026-04-30T08:58:11.327386009Z [err]      ^
+2026-04-30T08:58:11.327391354Z [err]    File "/mise/installs/python/3.13.13/lib/python3.13/asyncio/tasks.py", line 507, in wait_for
+2026-04-30T08:58:11.328246947Z [err]      return await fut
+2026-04-30T08:58:11.328254215Z [err]             ^^^^^^^^^
+2026-04-30T08:58:11.328259533Z [err]    File "/app/agent.py", line 94, in _fetch_and_decide
+2026-04-30T08:58:11.328265513Z [err]      decision = await self.decision.decide(token, source, raw)
+2026-04-30T08:58:11.328270418Z [err]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-30T08:58:11.328275260Z [err]    File "/app/decision_engine.py", line 63, in decide
+2026-04-30T08:58:11.328280345Z [err]      return self._rule_decide(token)
+2026-04-30T08:58:11.328284663Z [err]             ~~~~~~~~~~~~~~~~~^^^^^^^
+2026-04-30T08:58:11.328289339Z [err]    File "/app/decision_engine.py", line 185, in _rule_decide
+2026-04-30T08:58:11.328293737Z [err]      high.append(f"volume/liq ok ({token.vol1h/token.liq:.1f}x)")
+2026-04-30T08:58:11.328298241Z [err]                                    ~~~~~~~~~~~^~~~~~~~~~
+2026-04-30T08:58:11.328302932Z [err]  ZeroDivisionError: float division by zero
+2026-04-30T09:00:21.225559650Z [err]  2026-04-30 09:00:18,405 | INFO | Got difference for channel 2397610468 updates
